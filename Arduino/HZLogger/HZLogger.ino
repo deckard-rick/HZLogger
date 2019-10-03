@@ -20,9 +20,12 @@
  * 23.09.2019 Jetzt unter C:\DatenAndreas\tgsIOT\Arduino\HZLogger und unter git, noch ohne Remote Origin.
  * 30.09.2019 Step1: Umstellung auf OneWire als Bus über die Adressen der TempSensoren, warum bin ich nicht früher drauf gekommen. (aus Japan, im Shinkansen)
  *            Versuche in der ersten Version, hatten ergeben, dass das mit den Korrekturwerten nichts bringt, daher kommt das alles raus
- * 02.10.19   Step2: DevAddress ist ein uint[8] Feld, da müssen wir eine HexID-wie eine MacAdresse draus machen, 
+ * 02.10.2019 Step2: DevAddress ist ein uint[8] Feld, da müssen wir eine HexID-wie eine MacAdresse draus machen, 
  *            zudem müssen wir mit records/struct arbeiten und nicht mit Index, die Teile können sich ja verschieben oder ersetzen, dann finden wir die 
  *            anderen Informationen nicht mehr
+ * 03.10.2019 Verwaltung der Anschlüsse, wir ändern so ein wenig die Philosphie, der Sensor kann sich komplett selbst verwalten
+ *            um das EPROM nicht über zubelasten, wird aber nur bei Änderungen geschrieben
+ *            Zudem Umstelung der Messung auf messtime und reporttime je Sensor, damit er nicht immer alles meldet.
  * 
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
  * 
@@ -49,15 +52,16 @@
 //  können wir D7 und D8 nicht mitbenutzen
 //Der Zugriff auf GPIO10/SD3 und GPIO9/SD2 führte zum permanenten Reset/Neustarts des NodeMCU
 
-#define oneWireMax 12
-int cntDev = 0;
+#define sensorVersion "tgHZ04"
+
+ESP8266WebServer server(80); 
 
 OneWire *oneWire;
 DallasTemperature *ds18b20;
-ESP8266WebServer server(80); 
+#define oneWireMax 12
+#define NOVAL -9999
 
-#define configStart 32
-#define sensorVersion "tgHZ04"
+int cntDev = 0;
 
 struct Tdb18b20 {
   DeviceAddress address;
@@ -65,11 +69,14 @@ struct Tdb18b20 {
   String anschluss;
   float temperature;
   boolean found;
+  boolean changed = false;
+  long tempTime = NOVAL;
+  long reportTime = NOVAL;
 };
 
 Tdb18b20 tempSensors[oneWireMax];
-long temperatureTime;
-#define NOVAL -9999
+
+#define configStart 32
 
 struct TConfig {
   char cfgVersion[7];
@@ -89,16 +96,14 @@ struct TConfig {
 TConfig configs =  {sensorVersion,"HZT001","BUISNESSZUM","FE1996#ag!2008",12,25,120,60,300,0.5,"",300};
 
 struct TAnschluss{
-  char id[41]; //8*(4+1)+\0
+  char id[32]; //8*4
   char anschluss[16];
 };
 
 TAnschluss anschluesse[oneWireMax];
 
-bool messChanged = false;
 int checkPinTime = 0;
 int checkMessTime = 0;
-int checkReportTime = 0;
 
 
 void writelog(String s, boolean crLF=true)
@@ -137,7 +142,6 @@ void setup(void)
   writelog("initializiere D1");
   oneWire = new OneWire(oneWirePin);
   ds18b20 = new DallasTemperature (oneWire);
-  temperatureTime = NOVAL;
 
   writelog("wait 500");
   delay(500);
@@ -153,14 +157,14 @@ void setup(void)
   writelog("init Server");
   server.on("/",serverOnMain);
   server.on("/config",serverOnConfig);
+  server.on("/check",serverOnCheck);
+  server.on("/savecheck",serverOnSaveCheck);
   server.on("/values",serverOnValues);
   server.on("/valuesjson",serverOnValuesJson);
   server.on("/saveform",serverOnSaveForm);
   server.on("/writeconfig",serverOnWriteConfig);
-  server.on("/configjson",serverOnConfigJson);
-  server.on("/sendvalues",serverOnSendValues);
-  server.on("/sendconfig",serverOnSendConfig);
   server.on("/getconfig",serverOnGetConfig);
+  server.on("/putconfig",serverOnPutConfig);
 
   writelog("Start Server");
   server.begin();
@@ -171,11 +175,11 @@ void setup(void)
 String adrToId(DeviceAddress devAdr)
 {
   String erg = "";
-  char hex[5];
+  char hex[4];
   for (int i=0; i<8; i++)
     {
       sprintf(hex,"%4X",devAdr[i]);
-      erg += "x"+String(hex);
+      erg += String(hex);
     }
   return erg;
 }
@@ -229,6 +233,8 @@ void checkPins()
               tempSensors[0].anschluss = ""; //unbekannt, sonst hätten wir ihn gefunden
               tempSensors[0].temperature = NOVAL;
               tempSensors[0].found = true;
+              tempSensors[0].changed = false;
+              tempSensors[0].tempTime = NOVAL;
               /* nun ein Sensor mehr */
               cntDev++;
               /* es hat sich was verändert*/
@@ -265,12 +271,8 @@ void checkPins()
           writelog(String(tempSensors[i].id),false);
           writelog(" Anschluss:",false);
           writelog(String(tempSensors[i].anschluss));
-
-          tempSensors[i].id.toCharArray(anschluesse[i].id,41);
-          tempSensors[i].anschluss.toCharArray(anschluesse[i].anschluss,16);
-
-          writeAnschlusse();
         }
+      writeAnschluesse();
     }
 
   writelog("Check Devices - End");
@@ -290,8 +292,8 @@ void messWerte()
   for (int i=0; i < cntDev; i++)
     {
       tempSensors[i].temperature = 0;
-      if (timeTest(temperatureTime,configs.delTime)) //Messwert älter als eine Stunde, kann weg
-        temperatureTime = NOVAL;
+      if (timeTest(tempSensors[i].tempTime,configs.delTime)) //Messwert älter als eine Stunde, kann weg
+        tempSensors[i].tempTime = NOVAL;
     }
 
   if (cntDev > 0)
@@ -309,19 +311,21 @@ void messWerte()
 
   checkMessTime = millis();          
 
-  float value = 0;
-  temperatureTime = checkMessTime;
+  float value;
   for(byte j=0; j< cntDev; j++) 
     {
       value = (tempSensors[j].temperature / configs.messLoop);
-      if (abs( tempSensors[j].temperature - value) > configs.messDelta)
-        messChanged = true;
       tempSensors[j].temperature = value;
+      if (abs( tempSensors[j].temperature - value) > configs.messDelta)
+        tempSensors[j].changed = true;
+      tempSensors[j].tempTime = checkMessTime;
 
-      writelog("D1 GPIO ",false);
+      writelog("D ",false);
       writelog(String(oneWirePin),false);
       writelog("[",false);
-      writelog(String(j),false);
+      writelog(String(tempSensors[j].temperature),false);
+      writelog(", ",false);
+      writelog(tempSensors[j].anschluss,false);
       writelog("]: ",false);
       writelog(String(tempSensors[j].temperature),false);
       writelog(" 'C");
@@ -334,6 +338,7 @@ void serverOnMain()
   html += "<h1>Temperatursensor Heizung</h1>";
   html += "<p>Version"+String(sensorVersion)+"</p>";
   html += "<p><a href=\"/config\">Konfiguration</a></br>";
+  html += "<p><a href=\"/check\">Check tempSensor</a></br>";
   html += "<p><a href=\"/values\">aktuelle Werte</a></br>";
   html += "<p><a href=\"/valuesjson\">aktuelle Werte in JSON</a></br>";
   html += "<p><a href=\"/configjson\">aktuelle Konfiguration in JSON</a></br>";
@@ -347,7 +352,7 @@ void serverOnMain()
 String getHtmlConfig()
 {
   String html = "<html><body>"; 
-  html += "<h1>Temperatursensor Heizung</h1>";
+  html += "<h1>Sensor Heizung</h1>";
   html += "<h2>Konfiguration</h2>";
   html += "<form action=\"saveform\" method=\"POST\">";
   html += "<label>DeviceID</label><input type=\"text\" name=\"deviceID\" size=30 value=\""+String(configs.DeviceID)+"\"/><br/>";
@@ -426,18 +431,60 @@ void serverOnWriteConfig()
   server.send(200, "text/html", getHtmlConfig());
 }
 
+String getHtmlCheck()
+{
+  String html = "<html><body>"; 
+  html += "<form action=\"savecheck\" method=\"POST\">";
+  for (int i=0; i<oneWireMax; i++)
+    if (tempSensors[i].id != "")
+      html += "<label>"+String(i)+": "+tempSensors[i].id+"</label><input type=\"text\" name=\"val"+String(i)+"\" size=20 value=\""+String(tempSensors[i].anschluss)+"\"/><br/>";
+  html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
+  html += "</form>";
+  html += "<p><a href=\"/\">Main</a></br>";
+  html += "</body></html>"; 
+  return html; 
+}
+
+void serverOnCheck()
+{
+  checkPins();
+  server.send(200, "text/html", getHtmlCheck());
+}
+
+void serverOnSaveCheck()
+{
+  boolean changed = false;
+  for(int i=0; i<server.args(); i++)
+    {
+      String fn = server.argName(i);
+      if (fn.substring(0,3) == "val")
+        {
+          int j = fn.substring(3,2).toInt();
+          if (server.arg(i) != tempSensors[j].anschluss)
+            {
+              tempSensors[j].anschluss = server.arg(i);
+              changed = true;
+            }
+        }
+    }
+  if (changed) 
+    writeAnschluesse();
+    
+  server.send(200, "text/html", getHtmlConfig());
+}
+
 void serverOnValues()
 {
   String html = "<html><body>"; 
   html += "<h1>Temperatursensor "+String(configs.DeviceID)+"</h1>";
   html += "<h2>aktuelle Werte Anschluss D1</h2>";
   html += "<table><tr><th>Address (ID)</th><th>Bez</th><th>vor Sekunden</th><th>Temp</th></tr>";
-  int sec = (millis() - temperatureTime) / 1000;
   for (int i=0; i < cntDev; i++)
-    if (temperatureTime != NOVAL)
+    if (tempSensors[i].tempTime != NOVAL)
       {
         html += "<tr><td>"+tempSensors[i].id+"</td>"; 
         html += "<tr><td>"+tempSensors[i].anschluss+"</td>"; 
+        long sec = (millis() - tempSensors[i].tempTime) / 1000;
         html += "<td>"+String(sec)+"</td>"; 
         html += "<td>"+String(tempSensors[i].temperature)+"</td>"; 
         html += "</tr>"; 
@@ -449,33 +496,44 @@ void serverOnValues()
   server.send(200, "text/html", html);
 }
 
-String getValuesJson()
+String getValuesJson(boolean angefordert)
 {
-  int sec = (millis() - temperatureTime) / 1000;
-  
-  String json = "{ \"Version\": \""+String(sensorVersion)+"\", \"DeviceID\": \""+String(configs.DeviceID)+"\", \"sec\" : \""+String(sec)+"\", \"values\" : { ";
+  String json = "{ \"Version\": \""+String(sensorVersion)+"\", \"DeviceID\": \""+String(configs.DeviceID)+"\", \"values\" : { ";
 
   boolean first = true;
+  long now = millis();
+  
   for (int i=0; i < cntDev; i++)
-    if (temperatureTime != NOVAL)
-      {
-        if (!first) json += ", ";
-        json += "\"V"+String(i+1)+"\" : {"; 
-        json += "\"id\" : \""+String(tempSensors[i].id)+"\""; 
-        json += "\"anschluss\" : \""+String(tempSensors[i].anschluss)+"\""; 
-        json += ", \"temp\" : \""+String(tempSensors[i].temperature)+"\""; 
-        json += "} "; 
-        first = false;
+    if (angefordert || tempSensors[i].changed || timeTest(tempSensors[i].reportTime,configs.reportTime))
+      if (tempSensors[i].tempTime != NOVAL)
+        {
+          if (!first) json += ", ";
+          json += "\"V"+String(i+1)+"\" : {"; 
+          json += "\"id\" : \""+String(tempSensors[i].id)+"\","; 
+          json += "\"anschluss\" : \""+String(tempSensors[i].anschluss)+"\","; 
+          long sec = (millis() - tempSensors[i].tempTime) / 1000;
+          json += "\"sec\" : \""+String(sec)+"\",";
+          json += ", \"temp\" : \""+String(tempSensors[i].temperature)+"\""; 
+          json += "} "; 
+          first = false;
+          if (!angefordert)
+            {
+              tempSensors[i].changed = false;
+              tempSensors[i].reportTime = now;
+            }
       }
 
   json += "} }";
-  
-  return json;
+
+  if (!first)
+    return json;
+  else 
+    return "";
 }
 
 void serverOnValuesJson()
 {
-  server.send(200, "application/json", getValuesJson());
+  server.send(200, "application/json", getValuesJson(true));
 }
 
 String getConfigJson(boolean withAll)
@@ -498,7 +556,7 @@ String getConfigJson(boolean withAll)
   return json;
 }
 
-void serverOnConfigJson()
+void serverOnGetConfig()
 {
   boolean withAll = false;
   if (server.args() > 0)
@@ -509,14 +567,20 @@ void serverOnConfigJson()
 }
 
 //https://playground.arduino.cc/Code/EEPROMLoadAndSaveSettings
-void writeAnschlusse()
+void writeAnschluesse()
 {
+  for (int i=0; i<oneWireMax; i++)
+    {
+      tempSensors[i].id.toCharArray(anschluesse[i].id,41);
+      tempSensors[i].anschluss.toCharArray(anschluesse[i].anschluss,16);      
+    }
+  
   for (unsigned int i=0; i<sizeof(anschluesse); i++)
     EEPROM.write(configStart + sizeof(configs) + i, *((char*)&anschluesse + i));
   EEPROM.commit();    
 }
 
-void readAnschlusse()
+void readAnschluesse()
 {
   for (unsigned int i=0; i<sizeof(anschluesse); i++)
     *((char*)&anschluesse + i) = EEPROM.read(configStart + sizeof(configs) + i);  
@@ -535,7 +599,7 @@ void readConfig()
     {
       for (unsigned int i=0; i<sizeof(configs); i++)
         *((char*)&configs + i) = EEPROM.read(configStart + i);  
-      readAnschlusse();
+      readAnschluesse();
     }
 }
 
@@ -544,8 +608,7 @@ void writeConfig()
   for (unsigned int i=0; i<sizeof(configs); i++)
     EEPROM.write(configStart + i, *((char*)&configs + i));
   EEPROM.commit();    
-
-  writeAnschlusse();
+  writeAnschluesse();
 }
 
 
@@ -581,18 +644,10 @@ boolean sendToHost(String host, String values)
   return erg;
 }
 
-void serverOnSendValues()
-{
-  if (sendToHost(String(configs.host), getValuesJson()))
-    checkReportTime = millis();
-}
+//Quatsch, wenn wir vom aussen die Konfig wollen, dann holen wir sie über getConfig
+//void serverOnSendConfig()
 
-void serverOnSendConfig()
-{
-  sendToHost(String(configs.host), getConfigJson(true));
-}
-
-void serverOnGetConfig()
+void serverOnPutConfig()
 {
   //10.01.2019-tg
   //Hier braucht es einen schmalen JSON Parser, der unsere Werte liefert.
@@ -611,12 +666,9 @@ void loop(void)
     checkPins();
   
   if (timeTest(checkMessTime,configs.messTime))
-    messWerte();
-
-  if (timeTest(checkReportTime,configs.reportTime) || messChanged)
     {
-      serverOnSendValues();
-      messChanged = false;
+      messWerte();
+      sendToHost(String(configs.host), getValuesJson(false));
     }
 
   delay(50);
