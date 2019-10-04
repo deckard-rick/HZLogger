@@ -26,11 +26,13 @@
  * 03.10.2019 Verwaltung der Anschlüsse, wir ändern so ein wenig die Philosphie, der Sensor kann sich komplett selbst verwalten
  *            um das EPROM nicht über zubelasten, wird aber nur bei Änderungen geschrieben
  *            Zudem Umstelung der Messung auf messtime und reporttime je Sensor, damit er nicht immer alles meldet.
+ * 04.10.2019 Mittlererweile ist die Software eigentlich einsatzfähig, ich habe im Urlaub aber Zeit und damit sie als Grundlage für weitere Schaltungen dienen kann,
+ *            kann es natürlich noch verbessert werden.
+ *            Idee ist, alle Konfigwerte über eine Datenstruktur und je eine Lese/Schreib Routine abzuwicklen, (oder ohne), dann kann der Konfig-Teil immer gleich bleiben.
  * 
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
  * 
- * ToDo: Lesen Konfig von Server aus Gerät
- *       Schreibren von Konfig von Server an Gerät
+ * ToDo: Schreibren von Konfig von Server an Gerät, d.h. dieFunktion serverOnPutConfig. Dafür müssen wir json parsen.
  *        
  * (C) Andreas Tengicki 2018,2019
 */
@@ -102,9 +104,26 @@ struct TAnschluss{
 
 TAnschluss anschluesse[oneWireMax];
 
+/* Neuer Part mit der Datenstruktur für die Konfiguration, 
+ *  erstmal teste ich, ob der Compiler überhaupt versteht, was ich von ihm will.
+ */
+
+struct TConfConfig {
+  String fieldname;
+  String typ;
+  int groesse;
+  boolean readOnly;
+  char *psval;
+  int *pival;
+  double *pdval;
+};
+
+TConfConfig devConfig[2] = { {"version","S",7,true,configs.cfgVersion,NULL,NULL}, 
+                             {"deviceID","S",16,false,configs.DeviceID,NULL,NULL}
+                           };
+                           
 int checkPinTime = 0;
 int checkMessTime = 0;
-
 
 void writelog(String s, boolean crLF=true)
 {
