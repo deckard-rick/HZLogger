@@ -29,6 +29,7 @@
  * 04.10.2019 Mittlererweile ist die Software eigentlich einsatzfähig, ich habe im Urlaub aber Zeit und damit sie als Grundlage für weitere Schaltungen dienen kann,
  *            kann es natürlich noch verbessert werden.
  *            Idee ist, alle Konfigwerte über eine Datenstruktur und je eine Lese/Schreib Routine abzuwicklen, (oder ohne), dann kann der Konfig-Teil immer gleich bleiben.
+ * 05.10.2019 Datenbasiertes Konfig Handling abgeschlossen, ein paar Verbesserungen am HTML, jetzt ist es gut, es muss nur nochmal getestet werden (wieder daheim dann)
  * 
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
  * 
@@ -363,19 +364,35 @@ void messWerte()
     }
 }
 
-void serverOnMain()
+String htmlHeader()
 {
   String html = "<html><body>"; 
-  html += "<h1>Temperatursensor Heizung</h1>";
+  html += "<h1>HZLogger (Heinzungs-Logger)</h1>";
+  html += "<p>Device ID:"+String(configs.DeviceID)+"</br>";
   html += "<p>Version"+String(sensorVersion)+"</p>";
+  return html;
+}
+
+String htmlFooter()
+{
+  String html = "";
+  html += "<p><a href=\"/\">Main</a></br>";
+  html += "<small>Copyright Andreas Tengicki 2018-2020</small>";
+  html += "</body></html>"; 
+  return html;
+}
+
+void serverOnMain()
+{
+  String html = htmlHeader();
+  html += "<h2>Main</h2>";
   html += "<p><a href=\"/config\">Konfiguration</a></br>";
   html += "<p><a href=\"/check\">Check tempSensor</a></br>";
   html += "<p><a href=\"/values\">aktuelle Werte</a></br>";
   html += "<p><a href=\"/valuesjson\">aktuelle Werte in JSON</a></br>";
-  html += "<p><a href=\"/configjson\">aktuelle Konfiguration in JSON</a></br>";
-  html += "<p><a href=\"/sendvalues\">sende Werte (JSON) zu Host</a></br>";
-  html += "<p><a href=\"/sendconfig\">sende Config (JSON) zu Host</a></br>";
-  html += "</body></html>"; 
+  html += "<p><a href=\"/getconfig\">aktuelle Konfiguration in JSON</a></br>";
+  html += "<p>/putconfig\">Konfiguration in JSON< an Sensor senden, noch nicht implementiert/a></br>";
+  html += htmlFooter(); 
 
   server.send(200, "text/html", html);
 }
@@ -420,8 +437,7 @@ void setConfigValue(String fieldname, String value)
 
 String getHtmlConfig()
 {
-  String html = "<html><body>"; 
-  html += "<h1>HZLogger (Heinzungs-Logger)</h1>";
+  String html = htmlHeader(); 
   html += "<h2>Konfiguration</h2>";
   html += "<form action=\"saveconfig\" method=\"POST\">";
   /*
@@ -456,13 +472,15 @@ String getHtmlConfig()
       html += devConfig[i].description+"<br/><br/>";
     }
   /**/
-  html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
+  //html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
+  html += "<button type=\"submit\" name=\"action\">Werte &auml;ndern</button>";
   html += "</form>";
   html += "<p><a href=\"/\">Main</a></br>";
   html += "<form action=\"writeconfig\">";
-  html += "<input type=\"submit\" value=\"Config festschreiben\">"; 
+  //html += "<input type=\"submit\" value=\"Config festschreiben\">"; 
+  html += "<button type=\"submit\" name=\"action\">Config festschreiben</button>";
   html += "</form>";
-  html += "</body></html>"; 
+  html += htmlFooter(); 
   return html;
 }
   
@@ -513,15 +531,16 @@ void serverOnWriteConfig()
 
 String getHtmlCheck()
 {
-  String html = "<html><body>"; 
+  String html = htmlHeader();
+  html += "<h2>Anschluss-Check</h2>";
   html += "<form action=\"savecheck\" method=\"POST\">";
   for (int i=0; i<oneWireMax; i++)
     if (tempSensors[i].id != "")
       html += "<label>"+String(i)+": "+tempSensors[i].id+"</label><input type=\"text\" name=\"val"+String(i)+"\" size=20 value=\""+String(tempSensors[i].anschluss)+"\"/><br/>";
-  html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
+  //html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
+  html += "<button type=\"submit\" name=\"action\">Werte &auml;ndern</button>";
   html += "</form>";
-  html += "<p><a href=\"/\">Main</a></br>";
-  html += "</body></html>"; 
+  html += htmlFooter(); 
   return html; 
 }
 
@@ -555,9 +574,8 @@ void serverOnSaveCheck()
 
 void serverOnValues()
 {
-  String html = "<html><body>"; 
-  html += "<h1>Temperatursensor "+String(configs.DeviceID)+"</h1>";
-  html += "<h2>aktuelle Werte Anschluss D1</h2>";
+  String html = htmlHeader(); 
+  html += "<h2>aktuelle Werte</h2>";
   html += "<table><tr><th>Address (ID)</th><th>Bez</th><th>vor Sekunden</th><th>Temp</th></tr>";
   for (int i=0; i < cntDev; i++)
     if (tempSensors[i].tempTime != NOVAL)
@@ -570,8 +588,7 @@ void serverOnValues()
         html += "</tr>"; 
       }
   html += "</table>"; 
-  html += "<p><a href=\"/\">Main</a></br>";
-  html += "</body></html>"; 
+  html += htmlFooter();
 
   server.send(200, "text/html", html);
 }
