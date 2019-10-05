@@ -113,13 +113,25 @@ struct TConfConfig {
   String typ;
   int groesse;
   boolean readOnly;
+  boolean secure;
   char *psval;
   int *pival;
   double *pdval;
+  String description;
 };
 
-TConfConfig devConfig[2] = { {"version","S",7,true,configs.cfgVersion,NULL,NULL}, 
-                             {"deviceID","S",16,false,configs.DeviceID,NULL,NULL}
+TConfConfig devConfig[12] = { {"version","S",7,true,false,configs.cfgVersion,NULL,NULL,""}, 
+                             {"deviceID","S",16,false,false,configs.DeviceID,NULL,NULL,"Device ID, ist auch in der Server-Konfiguration hinterlegt (identifiziert)"},
+                             {"wifissid","S",30,false,true,configs.WIFISSID,NULL,NULL,"WLAN zum reinh&auml;ngen"},
+                             {"wifipwd","S",30,false,true,configs.WIFIPWD,NULL,NULL,"zugeh&ouml;riges WLAN Passwort"},
+                             {"dsaufloesung","I",0,false,false,NULL,&(configs.ds18b20Aufloesung),NULL,"Aufl&ouml;sung des Messsensors (Parameter des ds18b20s)"},
+                             {"messLoop","I",0,false,false,NULL,&(configs.messLoop),NULL,"Ermittlung des Messwerts als Mittelwert aus n Werten"},
+                             {"pinTime","I",0,false,false,NULL,&(configs.pinTime),NULL,"Sekunden nach denen auf vorhandene Sensoren getestet werden"},
+                             {"messTime","I",0,false,false,NULL,&(configs.messTime),NULL,"Sekunden nach denen ein Messwert ung&uuml;ltig wird"},
+                             {"delTime","I",0,false,false,NULL,&(configs.delTime),NULL,"&Auml;nderung nach der ein Wert sofort reported wird"},
+                             {"messDelta","D",0,false,false,NULL,NULL,&(configs.messDelta),"&Auml;nderung nach der ein Wert sofort reported wird"},
+                             {"host","S",128,false,true,configs.host,NULL,NULL,"URL an die mit http gesendet wird"},
+                             {"reportTime","I",0,false,false,NULL,&(configs.reportTime),NULL,"Sekunden nach denen die Messwerte sp&auml;testens reported wird"}
                            };
                            
 int checkPinTime = 0;
@@ -176,11 +188,11 @@ void setup(void)
   writelog("init Server");
   server.on("/",serverOnMain);
   server.on("/config",serverOnConfig);
+  server.on("/saveconfig",serverOnSaveConfig);
   server.on("/check",serverOnCheck);
   server.on("/savecheck",serverOnSaveCheck);
   server.on("/values",serverOnValues);
   server.on("/valuesjson",serverOnValuesJson);
-  server.on("/saveform",serverOnSaveForm);
   server.on("/writeconfig",serverOnWriteConfig);
   server.on("/getconfig",serverOnGetConfig);
   server.on("/putconfig",serverOnPutConfig);
@@ -368,12 +380,51 @@ void serverOnMain()
   server.send(200, "text/html", html);
 }
 
+int getConfigIndex(String fieldname)
+{
+  int erg = -1;
+  for (int i=0; i<sizeof(devConfig); i++)
+    if (devConfig[i].fieldname = fieldname)
+      {
+        erg = i;
+        break;
+      }
+  return erg;
+}
+
+String getConfigValue(String fieldname)
+{
+  String erg = "";
+  int i = getConfigIndex(fieldname);
+  if (i>=0)
+    if (devConfig[i].typ = "S")
+      erg = String(devConfig[i].psval);
+    else if (devConfig[i].typ = "I")
+      erg = String(*(devConfig[i].pival));
+    else if (devConfig[i].typ = "D")
+      erg = String(*(devConfig[i].pdval));
+  return erg;
+}
+
+void setConfigValue(String fieldname, String value)
+{
+  int i = getConfigIndex(fieldname);
+  if (i>=0)
+    if (devConfig[i].typ = "S")
+      value.toCharArray(devConfig[i].psval,devConfig[i].groesse);
+    else if (devConfig[i].typ = "I")
+      *(devConfig[i].pival) = value.toInt();
+    else if (devConfig[i].typ = "D")
+      *(devConfig[i].pdval) = value.toFloat();
+}
+
 String getHtmlConfig()
 {
   String html = "<html><body>"; 
-  html += "<h1>Sensor Heizung</h1>";
+  html += "<h1>HZLogger (Heinzungs-Logger)</h1>";
   html += "<h2>Konfiguration</h2>";
-  html += "<form action=\"saveform\" method=\"POST\">";
+  html += "<form action=\"saveconfig\" method=\"POST\">";
+  /*
   html += "<label>DeviceID</label><input type=\"text\" name=\"deviceID\" size=30 value=\""+String(configs.DeviceID)+"\"/><br/>";
   html += "Device ID, ist auch in der Server-Konfiguration hinterlegt (identifiziert).<br/><br/>";
   html += "<label>SSID</label><input type=\"text\" name=\"ssid\" size=30 value=\""+String(configs.WIFISSID)+"\"/><br/>";
@@ -381,7 +432,6 @@ String getHtmlConfig()
   html += "<label>Pwd</label><input type=\"text\" name=\"pwd\"  size=30 value=\""+String(configs.WIFIPWD)+"\"/><br/>";
   html += "zugeh&ouml;riges WLAN Passwort<br/><br/>";
   html += "<br/>";
-
   html += "<label>Aufl&ouml;sung</label><input type=\"text\" name=\"aufloesung\"  size=10 value=\""+String(configs.ds18b20Aufloesung)+"\"/><br/>";
   html += "Aufl&ouml;sung des Messsensors (Parameter des ds18b20s).<br/><br/>";
   html += "<label>Mess-Anzahl</label><input type=\"text\" name=\"messloop\"  size=10 value=\""+String(configs.messLoop)+"\"/><br/>";
@@ -398,6 +448,14 @@ String getHtmlConfig()
   html += "URL an die mit http gesendet wird.<br/><br/>";
   html += "<label>Report-Time</label><input type=\"text\" name=\"reporttime\"  size=10 value=\""+String(configs.reportTime)+"\"/><br/>";
   html += "Sekunden nach denen die Messwerte sp&auml;testens reported wird.<br/><br/>";
+  */
+  for (int i=0; i < sizeof(devConfig); i++)
+    {
+      html += "<label>"+devConfig[i].fieldname+"</label><input type=\"text\" name=\""+devConfig[i].fieldname+"\"  size="+String(devConfig[i].groesse);
+      html += " value=\""+getConfigValue(devConfig[i].fieldname)+"\"/><br/>";
+      html += devConfig[i].description+"<br/><br/>";
+    }
+  /**/
   html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
   html += "</form>";
   html += "<p><a href=\"/\">Main</a></br>";
@@ -413,9 +471,11 @@ void serverOnConfig()
   server.send(200, "text/html", getHtmlConfig());
 }
 
-void serverOnSaveForm()
+void serverOnSaveConfig()
 {
   for(int i=0; i<server.args(); i++)
+    setConfigValue(server.argName(i), server.arg(i));
+  /**  
     {
       String fn = server.argName(i);
       if (fn == "deviceID")
@@ -441,6 +501,7 @@ void serverOnSaveForm()
       else if (fn == "reporttime")
         configs.reportTime = server.arg(i).toInt();
     }
+  */  
   server.send(200, "text/html", getHtmlConfig());
 }
 
@@ -559,6 +620,17 @@ String getConfigJson(boolean withAll)
 {
   String json = "{ \"Version\": \""+String(sensorVersion)+"\", \"DeviceID\": \""+String(configs.DeviceID)+"\", \"configs\" : { ";
 
+  boolean first = true;
+  for (int i=0; i<sizeof(devConfig); i++)
+    {
+      if (withAll || !devConfig[i].secure)
+        {
+          if (!first) json += ",";
+          json += "\""+devConfig[i].fieldname+"\": \""+getConfigValue(devConfig[i].fieldname)+"\"";
+          first = false;
+        }  
+    }
+ /*   
   if (withAll)
     {
       json += "\"WIFISSID\": \""+String(configs.WIFISSID)+"\",";
@@ -571,6 +643,7 @@ String getConfigJson(boolean withAll)
   json += "\"messDelta\": \""+String(configs.messDelta)+"\",";
   json += "\"reportServer\": \""+String(configs.host)+"\",";
   json += "\"reportTime\": \""+String(configs.reportTime);
+  */
   json += "}  } }";
   return json;
 }
@@ -673,6 +746,7 @@ void serverOnPutConfig()
   //dabei ist aber zu beachten, dass die verschachtelten Strukturen richtig
   //geliefert werden.
   //In der Config ist zum Beispiel der komplexeste Wert: configs.korrWerte.D1.k1 = 4711 
+  //05.10.2019 Es gibt keine verschachtelten Werte mit in der Config, maximal in der Anschlussverwaltung
 }
 
 void loop(void) 
