@@ -74,10 +74,19 @@ struct Tdb18b20 {
   boolean found;
   boolean changed = false;
   long tempTime = NOVAL;
-  long reportTime = NOVAL;
+  long reportTime = 0;
 };
 
 Tdb18b20 tempSensors[oneWireMax];
+
+struct Tdht22 {
+  float roomTemp;
+  float roomHum;
+  int tempTime = NOVAL; 
+  int reportTime = 0; 
+};
+
+Tdht22 dht22;
 
 #define configStart 32
 
@@ -321,12 +330,20 @@ boolean timeTest(int checkTime, int sec)
 void messWerte()
 {
   float newTemperatures[oneWireMax];
+  float newRoomTemp;
+  float newRoomHum;
+
+  //Messwert älter als eine Stunde, kann weg
   for (int i=0; i < cntDev; i++)
     {
       tempSensors[i].temperature = 0;
-      if (timeTest(tempSensors[i].tempTime,configs.delTime)) //Messwert älter als eine Stunde, kann weg
+      if (timeTest(tempSensors[i].tempTime,configs.delTime))
         tempSensors[i].tempTime = NOVAL;
     }
+  newRoomTemp = 0;
+  newRoomHum = 0;
+  if (timeTest(dht22.tempTime,configs.delTime))
+    dht22.tempTime = NOVAL;
 
   if (cntDev > 0)
     for (int i=0; i < configs.messLoop; i++)
@@ -338,7 +355,8 @@ void messWerte()
               if (temp != DEVICE_DISCONNECTED_C) 
                 tempSensors[j].temperature += temp;
             }
-          delay(10);
+          /* TGMARK hier jetzt dht22.messen */  
+          delay(10); //TGMARK messDelay
         }
 
   checkMessTime = millis();          
@@ -362,6 +380,9 @@ void messWerte()
       writelog(String(tempSensors[j].temperature),false);
       writelog(" 'C");
     }
+  dht22.roomTemp = newRoomTemp / configs.messLoop;  
+  dht22.roomHum  = newRoomHum  / configs.messLoop;  
+  //dht22.tempTime = checkMessTime;  TGMARK er misst ja noch nicht
 }
 
 String htmlHeader()
@@ -475,7 +496,6 @@ String getHtmlConfig()
   //html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
   html += "<button type=\"submit\" name=\"action\">Werte &auml;ndern</button>";
   html += "</form>";
-  html += "<p><a href=\"/\">Main</a></br>";
   html += "<form action=\"writeconfig\">";
   //html += "<input type=\"submit\" value=\"Config festschreiben\">"; 
   html += "<button type=\"submit\" name=\"action\">Config festschreiben</button>";
@@ -587,6 +607,20 @@ void serverOnValues()
         html += "<td>"+String(tempSensors[i].temperature)+"</td>"; 
         html += "</tr>"; 
       }
+  if (dht22.tempTime != NOVAL)
+    {
+      html += "<tr><td>DHT22</td>"; 
+      html += "<tr><td>ROOMTEMP</td>"; 
+      long sec = (millis() - dht22.tempTime) / 1000;
+      html += "<td>"+String(sec)+"</td>"; 
+      html += "<td>"+String(dht22.roomTemp)+"</td>"; 
+      html += "</tr>"; 
+      html += "<tr><td>DHT22</td>"; 
+      html += "<tr><td>ROOMHUM</td>"; 
+      html += "<td>"+String(sec)+"</td>"; 
+      html += "<td>"+String(dht22.roomHum)+"</td>"; 
+      html += "</tr>"; 
+    }  
   html += "</table>"; 
   html += htmlFooter();
 
@@ -618,6 +652,24 @@ String getValuesJson(boolean angefordert)
               tempSensors[i].changed = false;
               tempSensors[i].reportTime = now;
             }
+      }
+  if (angefordert || timeTest(dht22.reportTime,configs.reportTime))
+    if (dht22.tempTime != NOVAL)
+      {
+        if (!first) json += ", ";
+        json += "\"V"+String(cntDev+1)+"\" : {"; 
+        json += "\"id\" : \"DHT22\","; 
+        json += "\"anschluss\" : \"ROOMTEMP\","; 
+        long sec = (millis() - dht22.tempTime) / 1000;
+        json += "\"sec\" : \""+String(sec)+"\",";
+        json += ", \"temp\" : \""+String(dht22.roomTemp)+"\""; 
+        json += "}, "; 
+        json += "\"V"+String(cntDev+2)+"\" : {"; 
+        json += "\"id\" : \"DHT22\","; 
+        json += "\"anschluss\" : \"ROOMHUM\","; 
+        json += "\"sec\" : \""+String(sec)+"\",";
+        json += ", \"temp\" : \""+String(dht22.roomHum)+"\""; 
+        json += "} "; 
       }
 
   json += "} }";
