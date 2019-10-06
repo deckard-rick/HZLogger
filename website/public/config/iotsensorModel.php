@@ -33,14 +33,14 @@ class iotSensorModel extends baseModel
   protected function getLoadSQL()
   {
 	  //$erg = parent::getLoadSQL();
-	  $erg = 'select se.sekey, dv.bez dvkey, se.pin, se.kuerzel, se.bezeichnung, se.measuredelta, se.lastmeasure, se.lastvalue0, se.lastvalue1 '.
+	  $erg = 'select se.sekey, dv.bez dvkey, se.id, se.anschluss, se.bezeichnung, se.lastmeasure, se.lastvalue '.
 	         'from iotsensor se join iotdevice dv on se.dvkey=dv.dvkey ';
 	  return $erg;	
   } 
   protected function getLoadOrder()
   {
 	  //$erg = parent::getLoadOrder(); 
-	  $erg = 'dv.bez, se.pin';
+	  $erg = 'dv.bez, se.anschluss';
 	  return $erg;
   }
   
