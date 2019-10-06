@@ -1,0 +1,1 @@
+"c:\Program Files\php\php.exe" -S localhost:8080 -t c:\DatenAndreas\websites
