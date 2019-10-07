@@ -51,17 +51,30 @@ if ($request->method == 'show')
     $config->load($request->squery);	
     $controller->view->stammTable($config,'');
 	
-	$controller->view->addHTML('<form action="/config/iotdevice.php?sendData" method="POST"><input type="hidden" name="dvkey" value="'.$request->squery[1].'"/><button type="submit">an Gerät senden</button></form>','');
+	$controller->view->addHTML('<form action="/config/iotdevice.php?getData" method="POST"><input type="hidden" name="dvkey" value="'.$request->squery[1].'"/><button type="submit">von Gerät holen</button></form>','');
+ 	$controller->view->addHTML('<form action="/config/iotdevice.php?putData" method="POST"><input type="hidden" name="dvkey" value="'.$request->squery[1].'"/><button type="submit">an Gerät senden</button></form>','');
   }
   
-if ($request->method == 'sendData')
+if ($request->method == 'getData')
   {
-	echo '<pre>SEND DATA</pre>';
+	echo '<pre>GET DATA</pre>';
 
-	$json = $model->getConfigJSON($request->post['dvkey']);
-	
 	$sql = 'select ip from iotdevice where dvkey ='.$dvkey;
-	$url = $this->fetchValue($sql).'://sendconfig';
+	$url = $this->fetchValue($sql).'://getconfig';
+	
+	//Und jetzt holen vom Gerät, das muss ich mit Doku klären. (13.07.2018-tg)
+	$values = json_decode($json)
+	$model->saveConfig($values['Version'],values['DecideID'],values['configs']);
+  }
+
+if ($request->method == 'putData')
+  {
+	echo '<pre>PUT DATA</pre>';
+
+    String ipaddress;
+	$json = $model->getConfigJSON($request->post['dvkey'],&ipaddress);
+	
+	$url = $ipadddress.'://putconfig';
 	
 	//Und jetzt senden an das Gerät, das muss ich mit Doku klären. (13.07.2018-tg)
 	//header('Content-Type: application/json');

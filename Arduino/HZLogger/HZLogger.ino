@@ -1,7 +1,4 @@
 /*
- * Ursprung DS18B20 Ansteuerung vom beelogger,
- * Erläuterungen dieses Programmcodes unter http://beelogger.de 
- *
  * 12.06.2018 Anpassung zur Prüfung an welchen Ports wir eine Signal haben.
  *            dazu braucht es das .begin, sonst wird der getDeviceCount() 
  *            nicht aktualisiert
@@ -30,8 +27,10 @@
  *            kann es natürlich noch verbessert werden.
  *            Idee ist, alle Konfigwerte über eine Datenstruktur und je eine Lese/Schreib Routine abzuwicklen, (oder ohne), dann kann der Konfig-Teil immer gleich bleiben.
  * 05.10.2019 Datenbasiertes Konfig Handling abgeschlossen, ein paar Verbesserungen am HTML, jetzt ist es gut, es muss nur nochmal getestet werden (wieder daheim dann)
+ * 07.10.2019 putConfig mit Ausnahme des Auslesens des POST Bodies mit dem json aus der http Anfrage 
  * 
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
+ *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de 
  * 
  * ToDo: Schreibren von Konfig von Server an Gerät, d.h. dieFunktion serverOnPutConfig. Dafür müssen wir json parsen.
  *        
@@ -644,7 +643,7 @@ String getValuesJson(boolean angefordert)
           json += "\"anschluss\" : \""+String(tempSensors[i].anschluss)+"\","; 
           long sec = (millis() - tempSensors[i].tempTime) / 1000;
           json += "\"sec\" : \""+String(sec)+"\",";
-          json += ", \"temp\" : \""+String(tempSensors[i].temperature)+"\""; 
+          json += ", \"value\" : \""+String(tempSensors[i].temperature)+"\""; 
           json += "} "; 
           first = false;
           if (!angefordert)
@@ -662,15 +661,15 @@ String getValuesJson(boolean angefordert)
         json += "\"anschluss\" : \"ROOMTEMP\","; 
         long sec = (millis() - dht22.tempTime) / 1000;
         json += "\"sec\" : \""+String(sec)+"\",";
-        json += ", \"temp\" : \""+String(dht22.roomTemp)+"\""; 
+        json += ", \"value\" : \""+String(dht22.roomTemp)+"\""; 
         json += "}, "; 
         json += "\"V"+String(cntDev+2)+"\" : {"; 
         json += "\"id\" : \"DHT22\","; 
         json += "\"anschluss\" : \"ROOMHUM\","; 
         json += "\"sec\" : \""+String(sec)+"\",";
-        json += ", \"temp\" : \""+String(dht22.roomHum)+"\""; 
+        json += ", \"value\" : \""+String(dht22.roomHum)+"\""; 
         json += "} "; 
-      }
+      } 
 
   json += "} }";
 
@@ -810,12 +809,45 @@ boolean sendToHost(String host, String values)
 
 void serverOnPutConfig()
 {
-  //10.01.2019-tg
-  //Hier braucht es einen schmalen JSON Parser, der unsere Werte liefert.
-  //dabei ist aber zu beachten, dass die verschachtelten Strukturen richtig
-  //geliefert werden.
-  //In der Config ist zum Beispiel der komplexeste Wert: configs.korrWerte.D1.k1 = 4711 
-  //05.10.2019 Es gibt keine verschachtelten Werte mit in der Config, maximal in der Anschlussverwaltung
+  /**10.01.2019-tg
+  *  Hier braucht es einen schmalen JSON Parser, der unsere Werte liefert.
+  *  dabei ist aber zu beachten, dass die verschachtelten Strukturen richtig
+  *  geliefert werden.
+  *  In der Config ist zum Beispiel der komplexeste Wert: configs.korrWerte.D1.k1 = 4711 
+  *  
+  * 05.10.2019 
+  * Es gibt keine verschachtelten Werte mit in der Config, maximal in der Anschlussverwaltung
+  *
+  * 07.10.2019
+  * Damit (also ohne Wiederholgruppen, können wir das lesen vereinfachen
+  * { setzt auf Modus 1, dann kommt ein Feldname, dann :, dann ein Wert und ggf ein ,
+  * } können wir überlesen, wenn ein feld1 : { feld2 kommt, führt das reset zum lesen von feld2
+  */
+  String json = ""; //hier muss der POST-Body der Abfrage rein
+  int modus = 0;
+  String fieldname = "";
+  String fieldvalue = "";
+  for (int i=0; i<sizeof(json); i++)
+    {
+      char c = json[i];
+      if ((modus == 0) and (c == '{')) modus = 1;
+      else if ((modus == 1) and (c == '"')) modus = 2;
+      else if ((modus == 2) and (c == '"')) modus = 3;
+      else if (modus == 2) fieldname += c;
+      else if ((modus == 3) and (c == ':')) modus = 4;
+      else if (((modus == 2) or (modus == 4)) and (c == '{')) modus = 1;
+      else if ((modus == 4) and (c == '"')) modus = 5;
+      else if ((modus == 5) and (c == '"'))
+        {
+          if ((fieldname == "DeviceID") and (fieldvalue != String(configs.DeviceID)))
+            return;
+          setConfigValue(fieldname,fieldvalue);
+          fieldname = "";
+          fieldvalue = "";
+          modus = 1;
+        }
+      else if (modus == 5) fieldvalue += c;
+    }
 }
 
 void loop(void) 
