@@ -28,12 +28,11 @@
  *            Idee ist, alle Konfigwerte über eine Datenstruktur und je eine Lese/Schreib Routine abzuwicklen, (oder ohne), dann kann der Konfig-Teil immer gleich bleiben.
  * 05.10.2019 Datenbasiertes Konfig Handling abgeschlossen, ein paar Verbesserungen am HTML, jetzt ist es gut, es muss nur nochmal getestet werden (wieder daheim dann)
  * 07.10.2019 putConfig mit Ausnahme des Auslesens des POST Bodies mit dem json aus der http Anfrage 
+ * 09.10.2019 für den DHT22 brauchen wir auch noch Anschluss Definitionen, sonst beist es sich mit anderen Geräten 
  * 
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
  *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de 
  * 
- * ToDo: Schreibren von Konfig von Server an Gerät, d.h. dieFunktion serverOnPutConfig. Dafür müssen wir json parsen.
- *        
  * (C) Andreas Tengicki 2018,2019
 */
 
@@ -79,9 +78,12 @@ struct Tdb18b20 {
 Tdb18b20 tempSensors[oneWireMax];
 
 struct Tdht22 {
-  float roomTemp;
-  float roomHum;
-  int tempTime = NOVAL; 
+  String anschlussTemp;
+  float temp;
+  String anschlussHum;
+  float hum;
+  int messTime = NOVAL; 
+  boolean changed = false;
   int reportTime = 0; 
 };
 
@@ -99,19 +101,21 @@ struct TConfig {
   int pinTime;
   int messTime;
   int delTime;
+  int messDelay;    //[ms]
   double messDelta;
+  double messDeltaHum;
   char host[128];
   int reportTime;
 };
 
-TConfig configs =  {sensorVersion,"HZT001","BUISNESSZUM","FE1996#ag!2008",12,25,120,60,300,0.5,"",300};
+TConfig configs =  {sensorVersion,"HZT001","BUISNESSZUM","FE1996#ag!2008",12,25,120,60,300,10,0.5,5,"",300};
 
 struct TAnschluss{
   char id[32]; //8*4
   char anschluss[16];
 };
 
-TAnschluss anschluesse[oneWireMax];
+TAnschluss anschluesse[oneWireMax+2];
 
 /* Neuer Part mit der Datenstruktur für die Konfiguration, 
  *  erstmal teste ich, ob der Compiler überhaupt versteht, was ich von ihm will.
@@ -129,7 +133,7 @@ struct TConfConfig {
   String description;
 };
 
-TConfConfig devConfig[12] = { {"version","S",7,true,false,configs.cfgVersion,NULL,NULL,""}, 
+TConfConfig devConfig[14] = { {"version","S",7,true,false,configs.cfgVersion,NULL,NULL,""}, 
                              {"deviceID","S",16,false,false,configs.DeviceID,NULL,NULL,"Device ID, ist auch in der Server-Konfiguration hinterlegt (identifiziert)"},
                              {"wifissid","S",30,false,true,configs.WIFISSID,NULL,NULL,"WLAN zum reinh&auml;ngen"},
                              {"wifipwd","S",30,false,true,configs.WIFIPWD,NULL,NULL,"zugeh&ouml;riges WLAN Passwort"},
@@ -138,7 +142,9 @@ TConfConfig devConfig[12] = { {"version","S",7,true,false,configs.cfgVersion,NUL
                              {"pinTime","I",0,false,false,NULL,&(configs.pinTime),NULL,"Sekunden nach denen auf vorhandene Sensoren getestet werden"},
                              {"messTime","I",0,false,false,NULL,&(configs.messTime),NULL,"Sekunden nach denen ein Messwert ung&uuml;ltig wird"},
                              {"delTime","I",0,false,false,NULL,&(configs.delTime),NULL,"&Auml;nderung nach der ein Wert sofort reported wird"},
-                             {"messDelta","D",0,false,false,NULL,NULL,&(configs.messDelta),"&Auml;nderung nach der ein Wert sofort reported wird"},
+                             {"messDelay","I",0,false,false,NULL,&(configs.messDelay),NULL,"Delay zwischen den Einzel-Messungen [ms]"},
+                             {"messDelta","D",0,false,false,NULL,NULL,&(configs.messDelta),"&Auml;nderung nachdem ein Temperatur-Wert sofort reported wird"},
+                             {"messDeltaHum","D",0,false,false,NULL,NULL,&(configs.messDeltaHum),"&Auml;nderung nachdem der Hum-Wert sofort reported wird"},
                              {"host","S",128,false,true,configs.host,NULL,NULL,"URL an die mit http gesendet wird"},
                              {"reportTime","I",0,false,false,NULL,&(configs.reportTime),NULL,"Sekunden nach denen die Messwerte sp&auml;testens reported wird"}
                            };
@@ -329,8 +335,8 @@ boolean timeTest(int checkTime, int sec)
 void messWerte()
 {
   float newTemperatures[oneWireMax];
-  float newRoomTemp;
-  float newRoomHum;
+  float newTemp;
+  float newHum;
 
   //Messwert älter als eine Stunde, kann weg
   for (int i=0; i < cntDev; i++)
@@ -339,24 +345,25 @@ void messWerte()
       if (timeTest(tempSensors[i].tempTime,configs.delTime))
         tempSensors[i].tempTime = NOVAL;
     }
-  newRoomTemp = 0;
-  newRoomHum = 0;
-  if (timeTest(dht22.tempTime,configs.delTime))
-    dht22.tempTime = NOVAL;
+  newTemp = 0;
+  newHum = 0;
+  if (timeTest(dht22.messTime,configs.delTime))
+    dht22.messTime = NOVAL;
 
-  if (cntDev > 0)
-    for (int i=0; i < configs.messLoop; i++)
-      {
-        ds18b20->requestTemperatures();
-        for(byte j=0 ;j < cntDev; j++) 
-            {
-              float temp =  ds18b20->getTempC(tempSensors[j].address);
-              if (temp != DEVICE_DISCONNECTED_C) 
-                tempSensors[j].temperature += temp;
-            }
-          /* TGMARK hier jetzt dht22.messen */  
-          delay(10); //TGMARK messDelay
-        }
+  for (int i=0; i < configs.messLoop; i++)
+    {
+      ds18b20->requestTemperatures();
+      for(byte j=0 ;j < cntDev; j++) 
+          {
+            float temp =  ds18b20->getTempC(tempSensors[j].address);
+            if (temp != DEVICE_DISCONNECTED_C) 
+              tempSensors[j].temperature += temp;
+          }
+      /* TGMARK hier jetzt dht22.messen */  
+      newTemp += 0;
+      newHum += 0;
+      delay(configs.messDelay); //TGMARK messDelay
+    }
 
   checkMessTime = millis();          
 
@@ -379,9 +386,16 @@ void messWerte()
       writelog(String(tempSensors[j].temperature),false);
       writelog(" 'C");
     }
-  dht22.roomTemp = newRoomTemp / configs.messLoop;  
-  dht22.roomHum  = newRoomHum  / configs.messLoop;  
-  //dht22.tempTime = checkMessTime;  TGMARK er misst ja noch nicht
+  value = newTemp / configs.messLoop;  
+  if (abs(dht22.temp - value) > configs.messDelta)
+    dht22.changed = true; 
+  dht22.temp = value;
+  
+  value = newHum  / configs.messLoop;  
+  if (abs(dht22.hum - value) > configs.messDeltaHum)
+    dht22.changed = true; 
+  dht22.hum  = value;
+  dht22.messTime = checkMessTime;  
 }
 
 String htmlHeader()
@@ -556,6 +570,8 @@ String getHtmlCheck()
   for (int i=0; i<oneWireMax; i++)
     if (tempSensors[i].id != "")
       html += "<label>"+String(i)+": "+tempSensors[i].id+"</label><input type=\"text\" name=\"val"+String(i)+"\" size=20 value=\""+String(tempSensors[i].anschluss)+"\"/><br/>";
+  html += "<label>"+String(oneWireMax)+": DHT22 Temp</label><input type=\"text\" name=\"val"+String(oneWireMax)+"\" size=20 value=\""+String(dht22.anschlussTemp)+"\"/><br/>";
+  html += "<label>"+String(oneWireMax+1)+": DHT22 Him</label><input type=\"text\" name=\"val"+String(oneWireMax+1)+"\" size=20 value=\""+String(dht22.anschlussHum)+"\"/><br/>";
   //html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
   html += "<button type=\"submit\" name=\"action\">Werte &auml;ndern</button>";
   html += "</form>";
@@ -578,11 +594,28 @@ void serverOnSaveCheck()
       if (fn.substring(0,3) == "val")
         {
           int j = fn.substring(3,2).toInt();
-          if (server.arg(i) != tempSensors[j].anschluss)
-            {
-              tempSensors[j].anschluss = server.arg(i);
-              changed = true;
-            }
+          if (j<oneWireMax)
+            if (server.arg(i) != tempSensors[j].anschluss)
+              {
+                tempSensors[j].anschluss = server.arg(i);
+                changed = true;
+              }
+            else
+              ;
+          else if (j == oneWireMax)    
+            if (server.arg(i) != dht22.anschlussTemp)
+              {
+                dht22.anschlussTemp = server.arg(i);
+                changed = true;
+              }
+            else
+              ;
+          else if (j == oneWireMax+1)    
+            if (server.arg(i) != dht22.anschlussHum)
+              {
+                dht22.anschlussHum = server.arg(i);
+                changed = true;
+              }
         }
     }
   if (changed) 
@@ -606,18 +639,18 @@ void serverOnValues()
         html += "<td>"+String(tempSensors[i].temperature)+"</td>"; 
         html += "</tr>"; 
       }
-  if (dht22.tempTime != NOVAL)
+  if (dht22.messTime != NOVAL)
     {
       html += "<tr><td>DHT22</td>"; 
-      html += "<tr><td>ROOMTEMP</td>"; 
-      long sec = (millis() - dht22.tempTime) / 1000;
+      html += "<tr><td>"+dht22.anschlussTemp+"</td>"; 
+      long sec = (millis() - dht22.messTime) / 1000;
       html += "<td>"+String(sec)+"</td>"; 
-      html += "<td>"+String(dht22.roomTemp)+"</td>"; 
+      html += "<td>"+String(dht22.temp)+"</td>"; 
       html += "</tr>"; 
       html += "<tr><td>DHT22</td>"; 
-      html += "<tr><td>ROOMHUM</td>"; 
+      html += "<tr><td>"+dht22.anschlussHum+"</td>"; 
       html += "<td>"+String(sec)+"</td>"; 
-      html += "<td>"+String(dht22.roomHum)+"</td>"; 
+      html += "<td>"+String(dht22.hum)+"</td>"; 
       html += "</tr>"; 
     }  
   html += "</table>"; 
@@ -652,22 +685,22 @@ String getValuesJson(boolean angefordert)
               tempSensors[i].reportTime = now;
             }
       }
-  if (angefordert || timeTest(dht22.reportTime,configs.reportTime))
-    if (dht22.tempTime != NOVAL)
+  if (angefordert || dht22.changed || timeTest(dht22.reportTime,configs.reportTime))
+    if (dht22.messTime != NOVAL)
       {
         if (!first) json += ", ";
         json += "\"V"+String(cntDev+1)+"\" : {"; 
         json += "\"id\" : \"DHT22\","; 
-        json += "\"anschluss\" : \"ROOMTEMP\","; 
-        long sec = (millis() - dht22.tempTime) / 1000;
+        json += "\"anschluss\" : \""+dht22.anschlussTemp+"\","; 
+        long sec = (millis() - dht22.messTime) / 1000;
         json += "\"sec\" : \""+String(sec)+"\",";
-        json += ", \"value\" : \""+String(dht22.roomTemp)+"\""; 
+        json += ", \"value\" : \""+String(dht22.temp)+"\""; 
         json += "}, "; 
         json += "\"V"+String(cntDev+2)+"\" : {"; 
         json += "\"id\" : \"DHT22\","; 
-        json += "\"anschluss\" : \"ROOMHUM\","; 
+        json += "\"anschluss\" : \""+dht22.anschlussHum+"\","; 
         json += "\"sec\" : \""+String(sec)+"\",";
-        json += ", \"value\" : \""+String(dht22.roomHum)+"\""; 
+        json += ", \"value\" : \""+String(dht22.hum)+"\""; 
         json += "} "; 
       } 
 
@@ -734,6 +767,8 @@ void writeAnschluesse()
       tempSensors[i].id.toCharArray(anschluesse[i].id,41);
       tempSensors[i].anschluss.toCharArray(anschluesse[i].anschluss,16);      
     }
+  dht22.anschlussTemp.toCharArray(anschluesse[oneWireMax].anschluss,16);
+  dht22.anschlussHum.toCharArray(anschluesse[oneWireMax+1].anschluss,16);
   
   for (unsigned int i=0; i<sizeof(anschluesse); i++)
     EEPROM.write(configStart + sizeof(configs) + i, *((char*)&anschluesse + i));
@@ -744,6 +779,14 @@ void readAnschluesse()
 {
   for (unsigned int i=0; i<sizeof(anschluesse); i++)
     *((char*)&anschluesse + i) = EEPROM.read(configStart + sizeof(configs) + i);  
+
+  for (int i=0; i<oneWireMax; i++)
+    {
+      tempSensors[i].id = String(anschluesse[i].id);
+      tempSensors[i].anschluss = String(anschluesse[i].anschluss);      
+    }
+  dht22.anschlussTemp = String(anschluesse[oneWireMax].anschluss);
+  dht22.anschlussHum = String(anschluesse[oneWireMax+1].anschluss);
 }
 
 void readConfig()
