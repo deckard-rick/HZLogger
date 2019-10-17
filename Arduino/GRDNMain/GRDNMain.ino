@@ -9,7 +9,7 @@
  *    
  * (C) Andreas Tengicki 2019
 */
-#include <TGDEVICE.hpp>
+#include <tgDevice.hpp>
 
 //https://desire.giesecke.tk/index.php/2018/01/30/esp32-dht11/
 #include <DHTesp.h>
@@ -84,6 +84,16 @@ class TExternActor : public TtgActor
     TtgDevice *device;
 };
 
+class TGardenMainActorsList : public TtgActorsList
+{
+  public:
+    TGardenMainActorsList(TtgDevice* t_device):TtgActorsList() {device = t_device;};
+  protected:
+    void doCalcStatus();
+  private:
+    TtgDevice *device;  
+};
+
 class TGardenMainDevice : public TtgDevice
 {
   public:
@@ -138,6 +148,11 @@ void TExternActor::doDeactivate()
   
 }
 
+void TGardenMainActorsList::doCalcStatus()
+{
+  device->doCalcStatus();  
+}
+
 void TGardenMainDevice::doHello()
 {
   writelog("");
@@ -155,7 +170,7 @@ void TGardenMainDevice::doRegister()
   sensors->add(new TDHT22SensorTemp(dht,"DHT22-TEMP",&messDeltaTemp));
   sensors->add(new TDHT22SensorHum(dht,"DHT22-HUM",&messDeltaHum));
 
-  registerActors(new TtgActorsList());
+  registerActors(new TGardenMainActorsList(this));
   actwaterint[0] = (TRelaisActor*) actors->add(new TRelaisActor(RELAISW1PIN,"RL-WATER1", &maintime)); 
   actwaterint[1] = (TRelaisActor*) actors->add(new TRelaisActor(RELAISW2PIN,"RL-WATER2", &maintime)); 
   actwaterint[2] = (TRelaisActor*) actors->add(new TRelaisActor(RELAISW3PIN,"RL-WATER3", &maintime)); 
