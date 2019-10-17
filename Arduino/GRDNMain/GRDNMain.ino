@@ -9,7 +9,7 @@
  *    
  * (C) Andreas Tengicki 2019
 */
-#include "TGDEVICE.h"
+#include <TGDEVICE.hpp>
 
 //https://desire.giesecke.tk/index.php/2018/01/30/esp32-dht11/
 #include <DHTesp.h>
