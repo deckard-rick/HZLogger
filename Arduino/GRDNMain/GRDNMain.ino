@@ -74,30 +74,30 @@ class TRelaisActor : public TtgActor
 class TExternActor : public TtgActor
 {
   public:
-    TExternActor(TtgDevice* t_device, const String& t_id, int *t_maintime):
+    TExternActor(TGDevice* t_device, const String& t_id, int *t_maintime):
                  TtgActor(t_id,t_maintime) 
                  {device = t_device;};
   protected:
     void doActivate();
     void doDeactivate();
   private:
-    TtgDevice *device;
+    TGDevice *device;
 };
 
 class TGardenMainActorsList : public TtgActorsList
 {
   public:
-    TGardenMainActorsList(TtgDevice* t_device):TtgActorsList() {device = t_device;};
+    TGardenMainActorsList(TGDevice* t_device):TtgActorsList() {device = t_device;};
   protected:
     void doCalcStatus();
   private:
-    TtgDevice *device;  
+    TGDevice *device;  
 };
 
-class TGardenMainDevice : public TtgDevice
+class TGardenMainDevice : public TGDevice
 {
   public:
-    TGardenMainDevice(const String& aDeviceVersion):TtgDevice(aDeviceVersion) {;}; 
+    TGardenMainDevice(const String& aDeviceVersion):TGDevice(aDeviceVersion) {;}; 
     String urlextactor;
   protected:
     void doHello();
@@ -159,7 +159,7 @@ void TGardenMainDevice::doHello()
   writelog("GRDNMain (Garten Bewässerung Main");
   writelog("");
   
-  TtgDevice::doHello();
+  TGDevice::doHello();
 }
 
 void TGardenMainDevice::doRegister()
@@ -181,27 +181,27 @@ void TGardenMainDevice::doRegister()
   actlicht       = (TRelaisActor*) actors->add(new TRelaisActor(RELAIS24PIN,"RL-LICHT24",&maintime)); 
   actpumpe       = (TRelaisActor*) actors->add(new TRelaisActor(RELAISWPPIN,"RL-PUMPE",  &maintime)); 
   
-  TtgDevice::doRegister();
+  TGDevice::doRegister();
   
-  deviceConfig->addConfig("messDeltaTemp","F",0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);
-  deviceConfig->addConfig("messDeltaHum","F",0,false,"Delta ab der eine Luftfeuchtigkeit reported wird",NULL,NULL,&messDeltaHum);
-  deviceConfig->addConfig("messDeltaBoden","F",0,false,"Delta ab der eine Bodenfeuchtigkeit reported wird",NULL,NULL,&messDeltaBoden);
+  deviceconfig->addConfig("messDeltaTemp","F",0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);
+  deviceconfig->addConfig("messDeltaHum","F",0,false,"Delta ab der eine Luftfeuchtigkeit reported wird",NULL,NULL,&messDeltaHum);
+  deviceconfig->addConfig("messDeltaBoden","F",0,false,"Delta ab der eine Bodenfeuchtigkeit reported wird",NULL,NULL,&messDeltaBoden);
 
-  deviceConfig->addConfig("waterStart","I",0,false,"Startzeit Beregnung",NULL,&waterStart,NULL);
-  deviceConfig->addConfig("waterTimer1","I",0,false,"Standard Dauer Wasser 1",NULL,&waterTime1,NULL);
-  deviceConfig->addConfig("waterTimer2","I",0,false,"Standard Dauer Wasser 2",NULL,&waterTime2,NULL);
-  deviceConfig->addConfig("waterTimer3","I",0,false,"Standard Dauer Wasser 3",NULL,&waterTime3,NULL);
-  deviceConfig->addConfig("waterTimer4","I",0,false,"Standard Dauer Wasser 4",NULL,&waterTime4,NULL);
-  deviceConfig->addConfig("waterTimer5","I",0,false,"Standard Dauer Wasser 5",NULL,&waterTime5,NULL);
-  deviceConfig->addConfig("waterTimer6","I",0,false,"Standard Dauer Wasser 6",NULL,&waterTime6,NULL);
-  deviceConfig->addConfig("waterTimer7","I",0,false,"Standard Dauer Wasser 7",NULL,&waterTime7,NULL);
-  deviceConfig->addConfig("waterPercent","I",0,false,"Stärke Beregnung in Prozent",NULL,&waterPercent,NULL);
-  deviceConfig->addConfig("urlextactor","S",32,false,"Zugriff auf externe Actoren",&urlextactor,NULL,NULL);     
+  deviceconfig->addConfig("waterStart","I",0,false,"Startzeit Beregnung",NULL,&waterStart,NULL);
+  deviceconfig->addConfig("waterTimer1","I",0,false,"Standard Dauer Wasser 1",NULL,&waterTime1,NULL);
+  deviceconfig->addConfig("waterTimer2","I",0,false,"Standard Dauer Wasser 2",NULL,&waterTime2,NULL);
+  deviceconfig->addConfig("waterTimer3","I",0,false,"Standard Dauer Wasser 3",NULL,&waterTime3,NULL);
+  deviceconfig->addConfig("waterTimer4","I",0,false,"Standard Dauer Wasser 4",NULL,&waterTime4,NULL);
+  deviceconfig->addConfig("waterTimer5","I",0,false,"Standard Dauer Wasser 5",NULL,&waterTime5,NULL);
+  deviceconfig->addConfig("waterTimer6","I",0,false,"Standard Dauer Wasser 6",NULL,&waterTime6,NULL);
+  deviceconfig->addConfig("waterTimer7","I",0,false,"Standard Dauer Wasser 7",NULL,&waterTime7,NULL);
+  deviceconfig->addConfig("waterPercent","I",0,false,"Stärke Beregnung in Prozent",NULL,&waterPercent,NULL);
+  deviceconfig->addConfig("urlextactor","S",32,false,"Zugriff auf externe Actoren",&urlextactor,NULL,NULL);     
 }
 
 void TGardenMainDevice::doSetup()
 {
-  TtgDevice::doSetup();
+  TGDevice::doSetup();
 
   writelog("initializiere DHT22");
   dht->setup(dhtPIN, dhtTYPE);  
@@ -209,7 +209,7 @@ void TGardenMainDevice::doSetup()
 
 void TGardenMainDevice::doAfterConfigChange()
 {
-  TtgDevice::doAfterConfigChange();
+  TGDevice::doAfterConfigChange();
   int starttime = waterStart;  
   starttime = actwaterint[0]->setAutoTimes(starttime,(int) (waterTime1 * (waterPercent/100.0)));
   starttime = actwaterint[1]->setAutoTimes(starttime,(int) (waterTime2 * (waterPercent/100.0)));
@@ -235,7 +235,7 @@ void TGardenMainDevice::doCalcStatus()
     actpumpe->setStatus('F');
 }      
 
-TtgDevice *device = new TGardenMainDevice(deviceVersion);
+TGDevice *device = new TGardenMainDevice(deviceVersion);
 
 void setup(void) 
 {
