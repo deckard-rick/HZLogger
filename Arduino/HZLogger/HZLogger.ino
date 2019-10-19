@@ -29,6 +29,8 @@
  * 05.10.2019 Datenbasiertes Konfig Handling abgeschlossen, ein paar Verbesserungen am HTML, jetzt ist es gut, es muss nur nochmal getestet werden (wieder daheim dann)
  * 07.10.2019 putConfig mit Ausnahme des Auslesens des POST Bodies mit dem json aus der http Anfrage 
  * 09.10.2019 für den DHT22 brauchen wir auch noch Anschluss Definitionen, sonst beist es sich mit anderen Geräten 
+ * 20.10.2019 parallel mit dem tgDevice begonnen, will aber im ersten Schritt den HZLogger normal zum laufen bringen. Bei der Beschäftigung mit GARDENMain hat sich aber
+ *            ergeben, das es genügt mit ID und DeviceID zu arbeiten, die ganze Anschuss Geschichte kann eigentlich wieder raus.
  * 
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
  *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de 
@@ -59,7 +61,7 @@ ESP8266WebServer server(80);
 
 OneWire *oneWire;
 DallasTemperature *ds18b20;
-#define oneWireMax 12
+#define oneWireMax 10
 #define NOVAL -9999
 
 int cntDev = 0;
@@ -67,7 +69,6 @@ int cntDev = 0;
 struct Tdb18b20 {
   DeviceAddress address;
   String id;
-  String anschluss;
   float temperature;
   boolean found;
   boolean changed = false;
@@ -78,9 +79,7 @@ struct Tdb18b20 {
 Tdb18b20 tempSensors[oneWireMax];
 
 struct Tdht22 {
-  String anschlussTemp;
   float temp;
-  String anschlussHum;
   float hum;
   int messTime = NOVAL; 
   boolean changed = false;
@@ -97,8 +96,6 @@ struct TConfig {
   char WIFISSID[30];
   char WIFIPWD[30];
   int ds18b20Aufloesung;
-  int messLoop;
-  int pinTime;
   int messTime;
   int delTime;
   int messDelay;    //[ms]
@@ -108,14 +105,7 @@ struct TConfig {
   int reportTime;
 };
 
-TConfig configs =  {sensorVersion,"HZT001","BUISNESSZUM","FE1996#ag!2008",12,25,120,60,300,10,0.5,5,"",300};
-
-struct TAnschluss{
-  char id[32]; //8*4
-  char anschluss[16];
-};
-
-TAnschluss anschluesse[oneWireMax+2];
+TConfig configs =  {sensorVersion,"HZT001","BUISNESSZUM","FE1996#ag!2008",12,120,60,300,0.5,5,"",300};
 
 /* Neuer Part mit der Datenstruktur für die Konfiguration, 
  *  erstmal teste ich, ob der Compiler überhaupt versteht, was ich von ihm will.
@@ -138,8 +128,6 @@ TConfConfig devConfig[14] = { {"version","S",7,true,false,configs.cfgVersion,NUL
                              {"wifissid","S",30,false,true,configs.WIFISSID,NULL,NULL,"WLAN zum reinh&auml;ngen"},
                              {"wifipwd","S",30,false,true,configs.WIFIPWD,NULL,NULL,"zugeh&ouml;riges WLAN Passwort"},
                              {"dsaufloesung","I",0,false,false,NULL,&(configs.ds18b20Aufloesung),NULL,"Aufl&ouml;sung des Messsensors (Parameter des ds18b20s)"},
-                             {"messLoop","I",0,false,false,NULL,&(configs.messLoop),NULL,"Ermittlung des Messwerts als Mittelwert aus n Werten"},
-                             {"pinTime","I",0,false,false,NULL,&(configs.pinTime),NULL,"Sekunden nach denen auf vorhandene Sensoren getestet werden"},
                              {"messTime","I",0,false,false,NULL,&(configs.messTime),NULL,"Sekunden nach denen ein Messwert ung&uuml;ltig wird"},
                              {"delTime","I",0,false,false,NULL,&(configs.delTime),NULL,"&Auml;nderung nach der ein Wert sofort reported wird"},
                              {"messDelay","I",0,false,false,NULL,&(configs.messDelay),NULL,"Delay zwischen den Einzel-Messungen [ms]"},
@@ -149,7 +137,6 @@ TConfConfig devConfig[14] = { {"version","S",7,true,false,configs.cfgVersion,NUL
                              {"reportTime","I",0,false,false,NULL,&(configs.reportTime),NULL,"Sekunden nach denen die Messwerte sp&auml;testens reported wird"}
                            };
                            
-int checkPinTime = 0;
 int checkMessTime = 0;
 
 void writelog(String s, boolean crLF=true)
@@ -176,7 +163,7 @@ void setup(void)
   WiFi.begin(configs.WIFISSID,configs.WIFIPWD);
   //TODO hier brauchen wir noch ein TimeOut
   while (WiFi.status() != WL_CONNECTED) 
-  {
+   {
     delay(500);
     writelog(".",false);
    }
@@ -195,7 +182,7 @@ void setup(void)
   checkPins();
 
   writelog("init EEPROM");
-  EEPROM.begin(sizeof(configs)+sizeof(anschluesse));
+  EEPROM.begin(sizeof(configs));
   
   writelog("load Config");
   readConfig();
@@ -205,7 +192,6 @@ void setup(void)
   server.on("/config",serverOnConfig);
   server.on("/saveconfig",serverOnSaveConfig);
   server.on("/check",serverOnCheck);
-  server.on("/savecheck",serverOnSaveCheck);
   server.on("/values",serverOnValues);
   server.on("/valuesjson",serverOnValuesJson);
   server.on("/writeconfig",serverOnWriteConfig);
@@ -246,12 +232,10 @@ void checkPins()
   writelog("D1: cntNew:",false);
   writelog(String(cntNew));
 
+  boolean changed = false;
   /* Rücksetzten des found-Flags */
   for(int i; i < cntDev; i++)
     tempSensors[i].found = false;
-
-  /* Wenn sich was ändert, müssen wir die Zuordnung neu speichern */
-  boolean changed = false;
 
   /* Prüfen ob Device noch da und neue an den Anfang setzen */
   for(int i; i < cntNew; i++)
@@ -276,7 +260,6 @@ void checkPins()
               for (int j=0; j<8; j++)  
                 tempSensors[0].address[j] = devAdr[j];
               tempSensors[0].id = id;
-              tempSensors[0].anschluss = ""; //unbekannt, sonst hätten wir ihn gefunden
               tempSensors[0].temperature = NOVAL;
               tempSensors[0].found = true;
               tempSensors[0].changed = false;
@@ -315,15 +298,10 @@ void checkPins()
           writelog(String(i),false);
           writelog(" Id",false);
           writelog(String(tempSensors[i].id),false);
-          writelog(" Anschluss:",false);
-          writelog(String(tempSensors[i].anschluss));
         }
-      writeAnschluesse();
     }
 
   writelog("Check Devices - End");
-
-  checkPinTime = millis();
 }
 
 boolean timeTest(int checkTime, int sec)
@@ -350,51 +328,40 @@ void messWerte()
   if (timeTest(dht22.messTime,configs.delTime))
     dht22.messTime = NOVAL;
 
-  for (int i=0; i < configs.messLoop; i++)
-    {
-      ds18b20->requestTemperatures();
-      for(byte j=0 ;j < cntDev; j++) 
+  ds18b20->requestTemperatures();
+  checkMessTime = millis();          
+  for(byte j=0 ;j < cntDev; j++) 
+      {
+        float temp =  ds18b20->getTempC(tempSensors[j].address);
+        if (temp != DEVICE_DISCONNECTED_C) 
           {
-            float temp =  ds18b20->getTempC(tempSensors[j].address);
-            if (temp != DEVICE_DISCONNECTED_C) 
-              tempSensors[j].temperature += temp;
+            if (abs( tempSensors[j].temperature - temp) > configs.messDelta)
+              tempSensors[j].changed = true;
+            tempSensors[j].temperature = temp;
+            tempSensors[j].tempTime = checkMessTime;
+
+            writelog("D",false);
+            writelog(String(oneWirePin),false);
+            writelog(" [",false);
+            writelog(String(tempSensors[j].id),false);
+            writelog("]: ",false);
+            writelog(String(tempSensors[j].temperature),false);
+            writelog(" 'C");
           }
-      /* TGMARK hier jetzt dht22.messen */  
-      newTemp += 0;
-      newHum += 0;
-      delay(configs.messDelay); //TGMARK messDelay
-    }
+      }
+  /* TGMARK hier jetzt dht22.messen */  
+  newTemp += 0;
+  newHum += 0;
 
   checkMessTime = millis();          
 
-  float value;
-  for(byte j=0; j< cntDev; j++) 
-    {
-      value = (tempSensors[j].temperature / configs.messLoop);
-      tempSensors[j].temperature = value;
-      if (abs( tempSensors[j].temperature - value) > configs.messDelta)
-        tempSensors[j].changed = true;
-      tempSensors[j].tempTime = checkMessTime;
-
-      writelog("D ",false);
-      writelog(String(oneWirePin),false);
-      writelog("[",false);
-      writelog(String(tempSensors[j].temperature),false);
-      writelog(", ",false);
-      writelog(tempSensors[j].anschluss,false);
-      writelog("]: ",false);
-      writelog(String(tempSensors[j].temperature),false);
-      writelog(" 'C");
-    }
-  value = newTemp / configs.messLoop;  
-  if (abs(dht22.temp - value) > configs.messDelta)
+  if (abs(dht22.temp - newTemp) > configs.messDelta)
     dht22.changed = true; 
-  dht22.temp = value;
+  dht22.temp = newTemp;
   
-  value = newHum  / configs.messLoop;  
-  if (abs(dht22.hum - value) > configs.messDeltaHum)
+  if (abs(dht22.hum - newHum) > configs.messDeltaHum)
     dht22.changed = true; 
-  dht22.hum  = value;
+  dht22.hum  = newHum;
   dht22.messTime = checkMessTime;  
 }
 
@@ -486,8 +453,6 @@ String getHtmlConfig()
   html += "Aufl&ouml;sung des Messsensors (Parameter des ds18b20s).<br/><br/>";
   html += "<label>Mess-Anzahl</label><input type=\"text\" name=\"messloop\"  size=10 value=\""+String(configs.messLoop)+"\"/><br/>";
   html += "Ermittlung des Messwerts aus Mess-Anzahl Werten.<br/><br/>";
-  html += "<label>Pin-Time</label><input type=\"text\" name=\"pintime\"  size=10 value=\""+String(configs.pinTime)+"\"/><br/>";
-  html += "Sekunden nach denen die Anschl&uuml;sse auf Sensoren getestet werden.<br/><br/>";
   html += "<label>Mess-Time</label><input type=\"text\" name=\"messtime\"  size=10 value=\""+String(configs.messTime)+"\"/><br/>";
   html += "Sekunden nach denen erneut eine Messung durchgef&uuml;hrt wird.<br/><br/>";
   html += "<label>Delete-Time</label><input type=\"text\" name=\"deltime\"  size=10 value=\""+String(configs.delTime)+"\"/><br/>";
@@ -539,8 +504,6 @@ void serverOnSaveConfig()
         configs.ds18b20Aufloesung = server.arg(i).toInt();
       else if (fn == "messloop")
         configs.messLoop = server.arg(i).toInt();
-      else if (fn == "pintime")
-        configs.pinTime = server.arg(i).toInt();
       else if (fn == "messtime")
         configs.messTime = server.arg(i).toInt();
       else if (fn == "deltime")
@@ -566,15 +529,9 @@ String getHtmlCheck()
 {
   String html = htmlHeader();
   html += "<h2>Anschluss-Check</h2>";
-  html += "<form action=\"savecheck\" method=\"POST\">";
   for (int i=0; i<oneWireMax; i++)
     if (tempSensors[i].id != "")
-      html += "<label>"+String(i)+": "+tempSensors[i].id+"</label><input type=\"text\" name=\"val"+String(i)+"\" size=20 value=\""+String(tempSensors[i].anschluss)+"\"/><br/>";
-  html += "<label>"+String(oneWireMax)+": DHT22 Temp</label><input type=\"text\" name=\"val"+String(oneWireMax)+"\" size=20 value=\""+String(dht22.anschlussTemp)+"\"/><br/>";
-  html += "<label>"+String(oneWireMax+1)+": DHT22 Him</label><input type=\"text\" name=\"val"+String(oneWireMax+1)+"\" size=20 value=\""+String(dht22.anschlussHum)+"\"/><br/>";
-  //html += "<input type=\"submit\" value=\"Werte &auml;ndern\">"; 
-  html += "<button type=\"submit\" name=\"action\">Werte &auml;ndern</button>";
-  html += "</form>";
+      html += "<label>"+String(i)+": "+tempSensors[i].id+"</label><br/>";
   html += htmlFooter(); 
   return html; 
 }
@@ -583,45 +540,6 @@ void serverOnCheck()
 {
   checkPins();
   server.send(200, "text/html", getHtmlCheck());
-}
-
-void serverOnSaveCheck()
-{
-  boolean changed = false;
-  for(int i=0; i<server.args(); i++)
-    {
-      String fn = server.argName(i);
-      if (fn.substring(0,3) == "val")
-        {
-          int j = fn.substring(3,2).toInt();
-          if (j<oneWireMax)
-            if (server.arg(i) != tempSensors[j].anschluss)
-              {
-                tempSensors[j].anschluss = server.arg(i);
-                changed = true;
-              }
-            else
-              ;
-          else if (j == oneWireMax)    
-            if (server.arg(i) != dht22.anschlussTemp)
-              {
-                dht22.anschlussTemp = server.arg(i);
-                changed = true;
-              }
-            else
-              ;
-          else if (j == oneWireMax+1)    
-            if (server.arg(i) != dht22.anschlussHum)
-              {
-                dht22.anschlussHum = server.arg(i);
-                changed = true;
-              }
-        }
-    }
-  if (changed) 
-    writeAnschluesse();
-    
-  server.send(200, "text/html", getHtmlConfig());
 }
 
 void serverOnValues()
@@ -633,7 +551,6 @@ void serverOnValues()
     if (tempSensors[i].tempTime != NOVAL)
       {
         html += "<tr><td>"+tempSensors[i].id+"</td>"; 
-        html += "<tr><td>"+tempSensors[i].anschluss+"</td>"; 
         long sec = (millis() - tempSensors[i].tempTime) / 1000;
         html += "<td>"+String(sec)+"</td>"; 
         html += "<td>"+String(tempSensors[i].temperature)+"</td>"; 
@@ -641,14 +558,12 @@ void serverOnValues()
       }
   if (dht22.messTime != NOVAL)
     {
-      html += "<tr><td>DHT22</td>"; 
-      html += "<tr><td>"+dht22.anschlussTemp+"</td>"; 
+      html += "<tr><td>DHT22-TEMP</td>"; 
       long sec = (millis() - dht22.messTime) / 1000;
       html += "<td>"+String(sec)+"</td>"; 
       html += "<td>"+String(dht22.temp)+"</td>"; 
       html += "</tr>"; 
-      html += "<tr><td>DHT22</td>"; 
-      html += "<tr><td>"+dht22.anschlussHum+"</td>"; 
+      html += "<tr><td>DHT22-HUM</td>"; 
       html += "<td>"+String(sec)+"</td>"; 
       html += "<td>"+String(dht22.hum)+"</td>"; 
       html += "</tr>"; 
@@ -673,7 +588,6 @@ String getValuesJson(boolean angefordert)
           if (!first) json += ", ";
           json += "\"V"+String(i+1)+"\" : {"; 
           json += "\"id\" : \""+String(tempSensors[i].id)+"\","; 
-          json += "\"anschluss\" : \""+String(tempSensors[i].anschluss)+"\","; 
           long sec = (millis() - tempSensors[i].tempTime) / 1000;
           json += "\"sec\" : \""+String(sec)+"\",";
           json += ", \"value\" : \""+String(tempSensors[i].temperature)+"\""; 
@@ -684,21 +598,19 @@ String getValuesJson(boolean angefordert)
               tempSensors[i].changed = false;
               tempSensors[i].reportTime = now;
             }
-      }
+        }
   if (angefordert || dht22.changed || timeTest(dht22.reportTime,configs.reportTime))
     if (dht22.messTime != NOVAL)
       {
         if (!first) json += ", ";
         json += "\"V"+String(cntDev+1)+"\" : {"; 
-        json += "\"id\" : \"DHT22\","; 
-        json += "\"anschluss\" : \""+dht22.anschlussTemp+"\","; 
+        json += "\"id\" : \"DHT22-TEMP\","; 
         long sec = (millis() - dht22.messTime) / 1000;
         json += "\"sec\" : \""+String(sec)+"\",";
         json += ", \"value\" : \""+String(dht22.temp)+"\""; 
         json += "}, "; 
         json += "\"V"+String(cntDev+2)+"\" : {"; 
-        json += "\"id\" : \"DHT22\","; 
-        json += "\"anschluss\" : \""+dht22.anschlussHum+"\","; 
+        json += "\"id\" : \"DHT22-HUM\","; 
         json += "\"sec\" : \""+String(sec)+"\",";
         json += ", \"value\" : \""+String(dht22.hum)+"\""; 
         json += "} "; 
@@ -739,7 +651,6 @@ String getConfigJson(boolean withAll)
     }
   json += "\"ds18b20Aufloesung\": \""+String(configs.ds18b20Aufloesung)+"\",";
   json += "\"messLoop\": \""+String(configs.messLoop)+"\",";
-  json += "\"pinTime\": \""+String(configs.pinTime)+"\",";
   json += "\"delTime\": \""+String(configs.delTime)+"\",";
   json += "\"messDelta\": \""+String(configs.messDelta)+"\",";
   json += "\"reportServer\": \""+String(configs.host)+"\",";
@@ -760,35 +671,6 @@ void serverOnGetConfig()
 }
 
 //https://playground.arduino.cc/Code/EEPROMLoadAndSaveSettings
-void writeAnschluesse()
-{
-  for (int i=0; i<oneWireMax; i++)
-    {
-      tempSensors[i].id.toCharArray(anschluesse[i].id,41);
-      tempSensors[i].anschluss.toCharArray(anschluesse[i].anschluss,16);      
-    }
-  dht22.anschlussTemp.toCharArray(anschluesse[oneWireMax].anschluss,16);
-  dht22.anschlussHum.toCharArray(anschluesse[oneWireMax+1].anschluss,16);
-  
-  for (unsigned int i=0; i<sizeof(anschluesse); i++)
-    EEPROM.write(configStart + sizeof(configs) + i, *((char*)&anschluesse + i));
-  EEPROM.commit();    
-}
-
-void readAnschluesse()
-{
-  for (unsigned int i=0; i<sizeof(anschluesse); i++)
-    *((char*)&anschluesse + i) = EEPROM.read(configStart + sizeof(configs) + i);  
-
-  for (int i=0; i<oneWireMax; i++)
-    {
-      tempSensors[i].id = String(anschluesse[i].id);
-      tempSensors[i].anschluss = String(anschluesse[i].anschluss);      
-    }
-  dht22.anschlussTemp = String(anschluesse[oneWireMax].anschluss);
-  dht22.anschlussHum = String(anschluesse[oneWireMax+1].anschluss);
-}
-
 void readConfig()
 {
   boolean valid = true;
@@ -802,7 +684,6 @@ void readConfig()
     {
       for (unsigned int i=0; i<sizeof(configs); i++)
         *((char*)&configs + i) = EEPROM.read(configStart + i);  
-      readAnschluesse();
     }
 }
 
@@ -811,7 +692,6 @@ void writeConfig()
   for (unsigned int i=0; i<sizeof(configs); i++)
     EEPROM.write(configStart + i, *((char*)&configs + i));
   EEPROM.commit();    
-  writeAnschluesse();
 }
 
 
@@ -896,11 +776,6 @@ void serverOnPutConfig()
 void loop(void) 
 {
   server.handleClient();
-  
-  //Prüfe de Pins nur alle 5 Minuten
-  //beim Überlauf nach ca 50 Tagen prüft er ggf einmal zu wenig,
-  if (timeTest(checkPinTime,configs.pinTime))
-    checkPins();
   
   if (timeTest(checkMessTime,configs.messTime))
     {
