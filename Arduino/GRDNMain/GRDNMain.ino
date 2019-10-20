@@ -24,6 +24,8 @@ const int dhtPIN = 4;     // what digital pin the DHT22 is conected to
 #define RELAISW1PIN 3
 #define RELAISWPPIN 1
 
+#define DE215ANALOG A0
+
 //Alle 13 GPIO Pins von D0 bis D10, SD3, SD2
 //int dataPins[13] = {16, 5, 4, 0, 2, 14, 12, 13, 15, 3, 1, 10, 9};
 //Auf der 0 will das Thermometer nicht wir nehmen D1 fü den OneWire Bus
@@ -56,6 +58,15 @@ class TDHT22SensorHum : public TtgSensor
     float doGetMessValue();
   private:
     DHTesp *dht;  
+};
+
+class TDE215SensorFeuchte : public TtgSensor
+{
+  public:
+    TDE215SensorFeuchte(const String& aId, float *apDelta):TtgSensor(aId,apDelta) {;};
+  protected:
+    float doGetMessValue(); //DE215ANALOG
+  private:
 };
 
 class TRelaisActor : public TtgActor
@@ -116,15 +127,18 @@ class TGardenMainDevice : public TGDevice
 
 float TDHT22SensorTemp::doGetMessValue()
 {
-  TempAndHumidity values = dht->getTempAndHumidity();
-  return values.temperature;
+  return dht->getTemperature();
 }
 
 
 float TDHT22SensorHum::doGetMessValue()
 {
-  TempAndHumidity values = dht->getTempAndHumidity();
-  return values.humidity;
+  return dht->getHumidity();
+}
+
+float TDE215SensorFeuchte::doGetMessValue()
+{
+  return analogRead(DE215ANALOG);
 }
 
 void TRelaisActor::doActivate()
@@ -169,6 +183,8 @@ void TGardenMainDevice::doRegister()
   registerSensors(new TtgSensorsList());
   sensors->add(new TDHT22SensorTemp(dht,"DHT22-TEMP",&messDeltaTemp));
   sensors->add(new TDHT22SensorHum(dht,"DHT22-HUM",&messDeltaHum));
+  sensors->add(new TDE215SensorFeuchte("DE215",&messDeltaBoden));
+  
 
   registerActors(new TGardenMainActorsList(this));
   actwaterint[0] = (TRelaisActor*) actors->add(new TRelaisActor(RELAISW1PIN,"RL-WATER1", &maintime)); 
