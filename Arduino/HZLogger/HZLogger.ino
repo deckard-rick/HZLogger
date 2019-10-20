@@ -44,6 +44,7 @@
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
+#include <DHTesp.h>
 
 #define SERIALOUT 
 
@@ -78,7 +79,10 @@ struct Tdb18b20 {
 
 Tdb18b20 tempSensors[oneWireMax];
 
-struct Tdht22 {
+const int dhtPIN = 4;     // what digital pin the DHT22 is conected to
+#define dhtTYPE DHTesp::DHT22   // there are multiple kinds of DHT sensors
+
+struct Sdht22 {
   float temp;
   float hum;
   int messTime = NOVAL; 
@@ -86,7 +90,8 @@ struct Tdht22 {
   int reportTime = 0; 
 };
 
-Tdht22 dht22;
+DHTesp *dht22;
+Sdht22 dhtdata;
 
 #define configStart 32
 
@@ -175,6 +180,10 @@ void setup(void)
   writelog("initializiere D1");
   oneWire = new OneWire(oneWirePin);
   ds18b20 = new DallasTemperature (oneWire);
+
+  writelog("initializiere DHT22");
+  dht22 = new DHTesp();
+  dht22->setup(dhtPIN, dhtTYPE);  
 
   writelog("wait 500");
   delay(500);
@@ -313,8 +322,6 @@ boolean timeTest(int checkTime, int sec)
 void messWerte()
 {
   float newTemperatures[oneWireMax];
-  float newTemp;
-  float newHum;
 
   //Messwert älter als eine Stunde, kann weg
   for (int i=0; i < cntDev; i++)
@@ -323,10 +330,8 @@ void messWerte()
       if (timeTest(tempSensors[i].tempTime,configs.delTime))
         tempSensors[i].tempTime = NOVAL;
     }
-  newTemp = 0;
-  newHum = 0;
-  if (timeTest(dht22.messTime,configs.delTime))
-    dht22.messTime = NOVAL;
+  if (timeTest(dhtdata.messTime,configs.delTime))
+    dhtdata.messTime = NOVAL;
 
   ds18b20->requestTemperatures();
   checkMessTime = millis();          
@@ -350,19 +355,18 @@ void messWerte()
           }
       }
   /* TGMARK hier jetzt dht22.messen */  
-  newTemp += 0;
-  newHum += 0;
+  TempAndHumidity values = dht22->getTempAndHumidity();
 
   checkMessTime = millis();          
 
-  if (abs(dht22.temp - newTemp) > configs.messDelta)
-    dht22.changed = true; 
-  dht22.temp = newTemp;
+  if (abs(dhtdata.temp - values.temperature) > configs.messDelta)
+    dhtdata.changed = true; 
+  dhtdata.temp = values.temperature;;
   
-  if (abs(dht22.hum - newHum) > configs.messDeltaHum)
-    dht22.changed = true; 
-  dht22.hum  = newHum;
-  dht22.messTime = checkMessTime;  
+  if (abs(dhtdata.hum - values.humidity) > configs.messDeltaHum)
+    dhtdata.changed = true; 
+  dhtdata.hum = values.humidity;
+  dhtdata.messTime = checkMessTime;  
 }
 
 String htmlHeader()
@@ -556,16 +560,16 @@ void serverOnValues()
         html += "<td>"+String(tempSensors[i].temperature)+"</td>"; 
         html += "</tr>"; 
       }
-  if (dht22.messTime != NOVAL)
+  if (dhtdata.messTime != NOVAL)
     {
       html += "<tr><td>DHT22-TEMP</td>"; 
-      long sec = (millis() - dht22.messTime) / 1000;
+      long sec = (millis() - dhtdata.messTime) / 1000;
       html += "<td>"+String(sec)+"</td>"; 
-      html += "<td>"+String(dht22.temp)+"</td>"; 
+      html += "<td>"+String(dhtdata.temp)+"</td>"; 
       html += "</tr>"; 
       html += "<tr><td>DHT22-HUM</td>"; 
       html += "<td>"+String(sec)+"</td>"; 
-      html += "<td>"+String(dht22.hum)+"</td>"; 
+      html += "<td>"+String(dhtdata.hum)+"</td>"; 
       html += "</tr>"; 
     }  
   html += "</table>"; 
@@ -599,20 +603,20 @@ String getValuesJson(boolean angefordert)
               tempSensors[i].reportTime = now;
             }
         }
-  if (angefordert || dht22.changed || timeTest(dht22.reportTime,configs.reportTime))
-    if (dht22.messTime != NOVAL)
+  if (angefordert || dhtdata.changed || timeTest(dhtdata.reportTime,configs.reportTime))
+    if (dhtdata.messTime != NOVAL)
       {
         if (!first) json += ", ";
         json += "\"V"+String(cntDev+1)+"\" : {"; 
         json += "\"id\" : \"DHT22-TEMP\","; 
-        long sec = (millis() - dht22.messTime) / 1000;
+        long sec = (millis() - dhtdata.messTime) / 1000;
         json += "\"sec\" : \""+String(sec)+"\",";
-        json += ", \"value\" : \""+String(dht22.temp)+"\""; 
+        json += ", \"value\" : \""+String(dhtdata.temp)+"\""; 
         json += "}, "; 
         json += "\"V"+String(cntDev+2)+"\" : {"; 
         json += "\"id\" : \"DHT22-HUM\","; 
         json += "\"sec\" : \""+String(sec)+"\",";
-        json += ", \"value\" : \""+String(dht22.hum)+"\""; 
+        json += ", \"value\" : \""+String(dhtdata.hum)+"\""; 
         json += "} "; 
       } 
 
