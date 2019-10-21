@@ -31,6 +31,10 @@
  * 09.10.2019 für den DHT22 brauchen wir auch noch Anschluss Definitionen, sonst beist es sich mit anderen Geräten 
  * 20.10.2019 parallel mit dem tgDevice begonnen, will aber im ersten Schritt den HZLogger normal zum laufen bringen. Bei der Beschäftigung mit GARDENMain hat sich aber
  *            ergeben, das es genügt mit ID und DeviceID zu arbeiten, die ganze Anschuss Geschichte kann eigentlich wieder raus.
+ * 21.10.2019 Mit PullUp Wiederstand 4,7kOhm kann er nur zwei Temp Sensoren betreiben. Mit 700Ohm geht es bis vier Sensoren, der 5te will nicht, ich vermute da kommen
+ *            zuwenig mA aus der Stromversorgung über den NodeMCU, d.h. wir sollten es mit der externen Stromversorgung versuchen.
+ * 21.10.2019 DHT22 getestet, funktioniert, wenn mann ihn richtig anschließt
+ * 
  * 
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
  *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de 
@@ -160,9 +164,11 @@ void setup(void)
   Serial.begin(9600);
 #endif
   writelog("");
-  writelog("DS18B20 Test");
+  writelog("HZLogger");
   writelog("");
 
+  writelog("wait 3s");
+  delay(3000);
   writelog("START Initialisierung");
 
   WiFi.begin(configs.WIFISSID,configs.WIFIPWD);
@@ -186,6 +192,9 @@ void setup(void)
   dht22->setup(dhtPIN, dhtTYPE);  
 
   writelog("wait 500");
+  delay(500);
+
+  ds18b20->begin();
   delay(500);
 
   checkPins();
@@ -216,12 +225,20 @@ void setup(void)
 String adrToId(DeviceAddress devAdr)
 {
   String erg = "";
-  char hex[4];
+  char hex[2];
+
   for (int i=0; i<8; i++)
     {
-      sprintf(hex,"%4X",devAdr[i]);
+      sprintf(hex,"%2X",devAdr[i]);
       erg += String(hex);
     }
+  for (int i=0; i<erg.length(); ++i)
+    {
+      if (erg[i]==' ') 
+        {
+          erg[i] = '0';  
+        }
+    }  
   return erg;
 }
 
@@ -236,80 +253,28 @@ void checkPins()
   writelog("Check Devices - Start");
 
   /* Lesen der aktuellen Anzahl */
-  ds18b20->begin();
-  int cntNew = ds18b20->getDeviceCount();
-  writelog("D1: cntNew:",false);
-  writelog(String(cntNew));
+  cntDev = ds18b20->getDeviceCount();
+  writelog("cntDev:",false);
+  writelog(String(cntDev));
 
-  boolean changed = false;
-  /* Rücksetzten des found-Flags */
-  for(int i; i < cntDev; i++)
-    tempSensors[i].found = false;
-
-  /* Prüfen ob Device noch da und neue an den Anfang setzen */
-  for(int i; i < cntNew; i++)
+  /* Die Devices als Sensoren einfach einsortieren, sie werden immer in 
+   *  der glechen Reihenfolge geliefert und ändern sich ja selten.
+   */
+  for(int i=0; i < cntDev; i++)
     {
       DeviceAddress devAdr; //Die DeviceAddress ist ein uint[8]
       if( ds18b20->getAddress(devAdr, i))
         {
-          boolean found = false;
           String id = adrToId(devAdr);
-          for (int j=0; (j < cntDev) && !found; j++)
-            if (id == tempSensors[j].id)
-              {
-                tempSensors[j].found = true;
-                found = true;
-              }
-          if (!found) 
-            {
-              /* Verschieben der bisherigen Sensoren eines nach hinten */
-              for(int j=oneWireMax-1; j>=0; j--)
-                tempSensors[j+1] = tempSensors[j];
-              /* Speichern der aktuellen Daten in tempSensor[0] */
-              for (int j=0; j<8; j++)  
-                tempSensors[0].address[j] = devAdr[j];
-              tempSensors[0].id = id;
-              tempSensors[0].temperature = NOVAL;
-              tempSensors[0].found = true;
-              tempSensors[0].changed = false;
-              tempSensors[0].tempTime = NOVAL;
-              /* nun ein Sensor mehr */
-              cntDev++;
-              /* es hat sich was verändert*/
-              changed = true;
-            }
-        }    
-    }
-
-  /* Inkative Sensoren hinter die aktiven schieben und zu altes fliegt raus */
-  for (int i=cntDev-1; i>=0; i--)
-    if (! tempSensors[i].found)  
-      {
-        Tdb18b20 inaktSensor = tempSensors[i];
-        //die akvtiven von cntDev bis i eines hoch (gen 0)
-        for (int j=i+1; j < cntDev; j++)
-          tempSensors[j-1] = tempSensors[j];
-        tempSensors[cntDev-1] = inaktSensor;
-        cntDev--;
-        changed = true;
-      }
-      
-  if (changed) 
-    {
-      boolean first = true;
-      writelog("  ** Changes");
-      writelog("     cntDev:",false);
-      writelog(String(cntDev));
-      for (int i=0; i<oneWireMax; i++)
-        {
-          if (first && !tempSensors[i].found)
-            writelog("  -- inaktiv");
-          writelog(String(i),false);
-          writelog(" Id",false);
-          writelog(String(tempSensors[i].id),false);
+          writelog("id: "+id,true);
+          for (int j=0; j<8; j++)  
+            tempSensors[i].address[j] = devAdr[j];
+          tempSensors[i].id = id;
+          tempSensors[i].temperature = NOVAL;
+          tempSensors[i].changed = false;
+          tempSensors[i].tempTime = NOVAL;
         }
     }
-
   writelog("Check Devices - End");
 }
 
@@ -354,7 +319,7 @@ void messWerte()
             writelog(" 'C");
           }
       }
-  /* TGMARK hier jetzt dht22.messen */  
+  /* TGMARK hier jetzt dht22.messen  */
   TempAndHumidity values = dht22->getTempAndHumidity();
 
   checkMessTime = millis();          
@@ -362,11 +327,22 @@ void messWerte()
   if (abs(dhtdata.temp - values.temperature) > configs.messDelta)
     dhtdata.changed = true; 
   dhtdata.temp = values.temperature;;
+  writelog("D",false);
+  writelog(String(dhtPIN),false);
+  writelog(" [DHT22-TEMP] :",false);
+  writelog(String(dhtdata.temp),false);
+  writelog("'C");
   
   if (abs(dhtdata.hum - values.humidity) > configs.messDeltaHum)
     dhtdata.changed = true; 
   dhtdata.hum = values.humidity;
-  dhtdata.messTime = checkMessTime;  
+  writelog("D",false);
+  writelog(String(dhtPIN),false);
+  writelog(" [DHT22-HUM] :",false);
+  writelog(String(dhtdata.hum),false);
+  writelog("%");
+
+  dhtdata.messTime = checkMessTime; 
 }
 
 String htmlHeader()
@@ -754,7 +730,7 @@ void serverOnPutConfig()
   int modus = 0;
   String fieldname = "";
   String fieldvalue = "";
-  for (int i=0; i<sizeof(json); i++)
+  for (int i=0; i<json.length(); i++)
     {
       char c = json[i];
       if ((modus == 0) and (c == '{')) modus = 1;
