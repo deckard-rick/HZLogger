@@ -132,7 +132,8 @@ struct TConfConfig {
   String description;
 };
 
-TConfConfig devConfig[14] = { {"version","S",7,true,false,configs.cfgVersion,NULL,NULL,""}, 
+const int devConfigCnt = 12;
+TConfConfig devConfig[devConfigCnt] = { {"version","S",7,true,false,configs.cfgVersion,NULL,NULL,""}, 
                              {"deviceID","S",16,false,false,configs.DeviceID,NULL,NULL,"Device ID, ist auch in der Server-Konfiguration hinterlegt (identifiziert)"},
                              {"wifissid","S",30,false,true,configs.WIFISSID,NULL,NULL,"WLAN zum reinh&auml;ngen"},
                              {"wifipwd","S",30,false,true,configs.WIFIPWD,NULL,NULL,"zugeh&ouml;riges WLAN Passwort"},
@@ -167,8 +168,8 @@ void setup(void)
   writelog("HZLogger");
   writelog("");
 
-  writelog("wait 3s");
-  delay(3000);
+  writelog("wait 10s");
+  delay(10000);
   writelog("START Initialisierung");
 
   WiFi.begin(configs.WIFISSID,configs.WIFIPWD);
@@ -372,7 +373,6 @@ void serverOnMain()
   html += "<p><a href=\"/values\">aktuelle Werte</a></br>";
   html += "<p><a href=\"/valuesjson\">aktuelle Werte in JSON</a></br>";
   html += "<p><a href=\"/getconfig\">aktuelle Konfiguration in JSON</a></br>";
-  html += "<p>/putconfig\">Konfiguration in JSON< an Sensor senden, noch nicht implementiert/a></br>";
   html += htmlFooter(); 
 
   server.send(200, "text/html", html);
@@ -381,8 +381,8 @@ void serverOnMain()
 int getConfigIndex(String fieldname)
 {
   int erg = -1;
-  for (int i=0; i<sizeof(devConfig); i++)
-    if (devConfig[i].fieldname = fieldname)
+  for (int i=0; i < devConfigCnt; i++)
+    if (devConfig[i].fieldname == fieldname)
       {
         erg = i;
         break;
@@ -395,11 +395,11 @@ String getConfigValue(String fieldname)
   String erg = "";
   int i = getConfigIndex(fieldname);
   if (i>=0)
-    if (devConfig[i].typ = "S")
+    if (devConfig[i].typ == "S")
       erg = String(devConfig[i].psval);
-    else if (devConfig[i].typ = "I")
+    else if (devConfig[i].typ == "I")
       erg = String(*(devConfig[i].pival));
-    else if (devConfig[i].typ = "D")
+    else if (devConfig[i].typ == "D")
       erg = String(*(devConfig[i].pdval));
   return erg;
 }
@@ -408,11 +408,11 @@ void setConfigValue(String fieldname, String value)
 {
   int i = getConfigIndex(fieldname);
   if (i>=0)
-    if (devConfig[i].typ = "S")
+    if (devConfig[i].typ == "S")
       value.toCharArray(devConfig[i].psval,devConfig[i].groesse);
-    else if (devConfig[i].typ = "I")
+    else if (devConfig[i].typ == "I")
       *(devConfig[i].pival) = value.toInt();
-    else if (devConfig[i].typ = "D")
+    else if (devConfig[i].typ == "D")
       *(devConfig[i].pdval) = value.toFloat();
 }
 
@@ -421,6 +421,7 @@ String getHtmlConfig()
   String html = htmlHeader(); 
   html += "<h2>Konfiguration</h2>";
   html += "<form action=\"saveconfig\" method=\"POST\">";
+  writelog("getHTMLConfig - 1");
   /*
   html += "<label>DeviceID</label><input type=\"text\" name=\"deviceID\" size=30 value=\""+String(configs.DeviceID)+"\"/><br/>";
   html += "Device ID, ist auch in der Server-Konfiguration hinterlegt (identifiziert).<br/><br/>";
@@ -444,7 +445,7 @@ String getHtmlConfig()
   html += "<label>Report-Time</label><input type=\"text\" name=\"reporttime\"  size=10 value=\""+String(configs.reportTime)+"\"/><br/>";
   html += "Sekunden nach denen die Messwerte sp&auml;testens reported wird.<br/><br/>";
   */
-  for (int i=0; i < sizeof(devConfig); i++)
+  for (int i=0; i < devConfigCnt; i++)
     {
       html += "<label>"+devConfig[i].fieldname+"</label><input type=\"text\" name=\""+devConfig[i].fieldname+"\"  size="+String(devConfig[i].groesse);
       html += " value=\""+getConfigValue(devConfig[i].fieldname)+"\"/><br/>";
@@ -614,7 +615,7 @@ String getConfigJson(boolean withAll)
   String json = "{ \"Version\": \""+String(sensorVersion)+"\", \"DeviceID\": \""+String(configs.DeviceID)+"\", \"configs\" : { ";
 
   boolean first = true;
-  for (int i=0; i<sizeof(devConfig); i++)
+  for (int i=0; i < devConfigCnt; i++)
     {
       if (withAll || !devConfig[i].secure)
         {
