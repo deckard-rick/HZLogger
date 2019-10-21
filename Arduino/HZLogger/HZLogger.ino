@@ -34,8 +34,9 @@
  * 21.10.2019 Mit PullUp Wiederstand 4,7kOhm kann er nur zwei Temp Sensoren betreiben. Mit 700Ohm geht es bis vier Sensoren, der 5te will nicht, ich vermute da kommen
  *            zuwenig mA aus der Stromversorgung über den NodeMCU, d.h. wir sollten es mit der externen Stromversorgung versuchen.
  * 21.10.2019 DHT22 getestet, funktioniert, wenn mann ihn richtig anschließt
+ * 21.10.2019 Config Modul geändert, man darf kein sizeof verwenden, für Array Größen und auf == aufpassen, vom Prinzip her tut es aber!
  * 
- * 
+ * Allgemeine Hinweise: https://www.mikrocontroller-elektronik.de/nodemcu-esp8266-tutorial-wlan-board-arduino-ide/
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
  *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de 
  * 
