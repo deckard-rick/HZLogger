@@ -52,7 +52,7 @@
 //int dataPins[13] = {16, 5, 4, 0, 2, 14, 12, 13, 15, 3, 1, 10, 9};
 //Auf der 0 will das Thermometer nicht wir nehmen D1 fü den OneWire Bus
 
-const int  oneWirePin 5
+const int oneWirePin = 5;
 //Ist D7 ist RXD2 und mit D8 TXD2 Teil der seriellen Schnittstelle, solange wir sicher so debuggen wollen
 //  können wir D7 und D8 nicht mitbenutzen
 //Der Zugriff auf GPIO10/SD3 und GPIO9/SD2 führte zum permanenten Reset/Neustarts des NodeMCU
@@ -69,14 +69,14 @@ const int dhtPIN = 4;     // what digital pin the DHT22 is conected to
 class TDS18B20Sensor : public TtgSensor
 {
   public:
-    TDS18B20Sensor(DallasTemperature *t_ds18b20, DeviceAddress t_devaddress, const String& aId, float *apDelta):TtgSensor(aId,apDelta) 
+    TDS18B20Sensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const String& aId, float *apDelta):TtgSensor(aId,apDelta) 
                   {ds18b20=t_ds18b20; 
-                   for (int i=0; i<8; ++i) devaddress[i] = t_devaddress[i]};
+                   for (int i=0; i<8; ++i) address[i] = t_address[i];};
   protected:
     float doGetMessValue();
   private:
     DallasTemperature *ds18b20;
-    DeviceAddress devaddress  
+    DeviceAddress address  ;
 };
 
 class TDHT22SensorTemp : public TtgSensor
@@ -112,11 +112,14 @@ class THZLoggerDevice : public TGDevice
     DallasTemperature *ds18b20;
     DHTesp *dht = new DHTesp;
     float messDeltaTemp,messDeltaHum;
+    String adrToId(DeviceAddress devAdr);
+    void registerTempSensors();
 };
 
 float TDS18B20Sensor::doGetMessValue()
 {
-  return dht->getTemperature();
+  ds18b20->requestTemperaturesByAddress(address);
+  return ds18b20->getTempC(address);
 }
 
 float TDHT22SensorTemp::doGetMessValue()
@@ -163,7 +166,7 @@ void THZLoggerDevice::registerTempSensors()
   writelog("register Temperature Sensors - Start");
 
   /* Lesen der aktuellen Anzahl */
-  cntDev = ds18b20->getDeviceCount();
+  int cntDev = ds18b20->getDeviceCount();
   writelog("cntDev:",false);
   writelog(String(cntDev));
 
