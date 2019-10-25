@@ -111,7 +111,8 @@ class THZLoggerDevice : public TGDevice
     OneWire *oneWire;
     DallasTemperature *ds18b20;
     DHTesp *dht = new DHTesp;
-    float messDeltaTemp,messDeltaHum;
+    float messDeltaTemp = 2;
+    float messDeltaHum = 5;
     String adrToId(DeviceAddress devAdr);
     void registerTempSensors();
 };
@@ -165,7 +166,12 @@ void THZLoggerDevice::registerTempSensors()
 {
   writelog("register Temperature Sensors - Start");
 
+  writelog("init DS18B20");
+  oneWire = new OneWire(oneWirePin);
+  ds18b20 = new DallasTemperature (oneWire);
+
   /* Lesen der aktuellen Anzahl */
+  writelog("read DS18B20 Count");
   int cntDev = ds18b20->getDeviceCount();
   writelog("cntDev:",false);
   writelog(String(cntDev));
@@ -212,10 +218,6 @@ void THZLoggerDevice::doRegister()
 void THZLoggerDevice::doSetup()
 {
   TGDevice::doSetup();
-
-  writelog("init DS18B20");
-  oneWire = new OneWire(oneWirePin);
-  ds18b20 = new DallasTemperature (oneWire);
 
   writelog("init DHT22");
   dht->setup(dhtPIN, dhtTYPE);  
