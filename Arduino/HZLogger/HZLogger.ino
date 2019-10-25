@@ -102,7 +102,8 @@ class TDHT22SensorHum : public TtgSensor
 class THZLoggerDevice : public TGDevice
 {
   public:
-    THZLoggerDevice(const String& aDeviceVersion):TGDevice(aDeviceVersion) {;}; 
+    THZLoggerDevice(const String& aDeviceVersion):TGDevice(aDeviceVersion){init();};
+        
   protected:
     void doHello();
     void doRegister();
@@ -114,6 +115,7 @@ class THZLoggerDevice : public TGDevice
     float messDeltaTemp = 2;
     float messDeltaHum = 5;
     String adrToId(DeviceAddress devAdr);
+    void init();
     void registerTempSensors();
 };
 
@@ -133,6 +135,14 @@ float TDHT22SensorHum::doGetMessValue()
   return dht->getHumidity();
 }
 
+void THZLoggerDevice::init()
+{
+  deviceID[0] = '\0';
+  wifiSSID[0] = '\0';
+  wifiPWD[0] = '\0';
+  host[0] = '\0'; 
+}
+
 void THZLoggerDevice::doHello()
 {
   writelog("");
@@ -146,7 +156,7 @@ String THZLoggerDevice::adrToId(DeviceAddress devAdr)
 {
   String erg = "Ox";
   char hex[2];
-
+  
   for (int i=0; i<8; i++)
     {
       sprintf(hex,"%2X",devAdr[i]);
@@ -211,12 +221,13 @@ void THZLoggerDevice::doRegister()
 
   TGDevice::doRegister();
   
-  deviceconfig->addConfig("messDeltaTemp","F",0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);
+  deviceconfig->addConfig("messDeltaTemp","F",0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);   
   deviceconfig->addConfig("messDeltaHum","F",0,false,"Delta ab der eine Luftfeuchtigkeit reported wird",NULL,NULL,&messDeltaHum);
 }
 
 void THZLoggerDevice::doSetup()
 {
+  writelog("THZLoggerDevice::doSetup()");
   TGDevice::doSetup();
 
   writelog("init DHT22");
