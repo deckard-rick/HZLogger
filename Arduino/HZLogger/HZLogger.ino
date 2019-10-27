@@ -1,4 +1,4 @@
-/*
+  /*
  * 12.06.2018 Anpassung zur Prüfung an welchen Ports wir eine Signal haben.
  *            dazu braucht es das .begin, sonst wird der getDeviceCount() 
  *            nicht aktualisiert
@@ -45,6 +45,7 @@
 */
 
 #include <tgDevice.hpp>
+#include <OneWire.h>
 #include <DallasTemperature.h> 
 #include <DHTesp.h>
 
@@ -52,7 +53,8 @@
 //int dataPins[13] = {16, 5, 4, 0, 2, 14, 12, 13, 15, 3, 1, 10, 9};
 //Auf der 0 will das Thermometer nicht wir nehmen D1 fü den OneWire Bus
 
-const int oneWirePin = 5;
+#define ONE_WRIE_BUS 5
+
 //Ist D7 ist RXD2 und mit D8 TXD2 Teil der seriellen Schnittstelle, solange wir sicher so debuggen wollen
 //  können wir D7 und D8 nicht mitbenutzen
 //Der Zugriff auf GPIO10/SD3 und GPIO9/SD2 führte zum permanenten Reset/Neustarts des NodeMCU
@@ -99,23 +101,29 @@ class TDHT22SensorHum : public TtgSensor
     DHTesp *dht;  
 };
 
+OneWire oneWire(ONE_WRIE_BUS);
+DallasTemperature ds18b20(&oneWire);
+DHTesp dht;
+
 class THZLoggerDevice : public TGDevice
 {
   public:
-    THZLoggerDevice(const String& aDeviceVersion):TGDevice(aDeviceVersion){init();};
+    THZLoggerDevice(const String& aDeviceVersion):TGDevice(aDeviceVersion)
+      { initChar(deviceID,16,"HZLOGzz");
+        initChar(wifiSSID,16,"BUISNESSZUM");
+        initChar(wifiPWD ,32,"FE1996#ag!2008");
+        initChar(host    ,32, "");
+      }  
         
   protected:
     void doHello();
     void doRegister();
     void doSetup();
   private:
-    OneWire *oneWire;
-    DallasTemperature *ds18b20;
-    DHTesp *dht = new DHTesp;
     float messDeltaTemp = 2;
     float messDeltaHum = 5;
     String adrToId(DeviceAddress devAdr);
-    void init();
+    void initChar(char* t_field, const int t_maxlen, const String& value);
     void registerTempSensors();
 };
 
@@ -135,12 +143,12 @@ float TDHT22SensorHum::doGetMessValue()
   return dht->getHumidity();
 }
 
-void THZLoggerDevice::init()
+void THZLoggerDevice::initChar(char* t_field, const int t_maxlen, const String& value)
 {
-  deviceID[0] = '\0';
-  wifiSSID[0] = '\0';
-  wifiPWD[0] = '\0';
-  host[0] = '\0'; 
+  int len = value.length();
+  if (len >= t_maxlen) len = t_maxlen - 1;
+  for(int i=0; i<len; ++i) t_field[i] = value[i];
+  for(int i=len; i<t_maxlen; ++i) t_field[i] = '\0';
 }
 
 void THZLoggerDevice::doHello()
@@ -177,14 +185,15 @@ void THZLoggerDevice::registerTempSensors()
   writelog("register Temperature Sensors - Start");
 
   writelog("init DS18B20");
-  oneWire = new OneWire(oneWirePin);
-  ds18b20 = new DallasTemperature (oneWire);
+  //oneWire = new OneWire(oneWirePin);
+  //ds18b20 = new DallasTemperature (oneWire);
+  ds18b20.begin();
+  delay(500);
 
   /* Lesen der aktuellen Anzahl */
   writelog("read DS18B20 Count");
-  int cntDev = ds18b20->getDeviceCount();
-  writelog("cntDev:",false);
-  writelog(String(cntDev));
+  int cntDev = ds18b20.getDeviceCount();
+  writelog("cntDev:"+String(cntDev));
 
   /* Die Devices als Sensoren einfach einsortieren, sie werden immer in 
    *  der glechen Reihenfolge geliefert und ändern sich ja selten.
@@ -192,10 +201,10 @@ void THZLoggerDevice::registerTempSensors()
   for(int i=0; i < cntDev; i++)
     {
       DeviceAddress devAdr; //Die DeviceAddress ist ein uint[8]
-      if( ds18b20->getAddress(devAdr, i))
+      if( ds18b20.getAddress(devAdr, i))
         {
           String id = adrToId(devAdr);
-          sensors->add(new TDS18B20Sensor(ds18b20,devAdr,id,&messDeltaTemp));
+          //sensors->add(new TDS18B20Sensor(&ds18b20,devAdr,id,&messDeltaTemp));
 
           writelog("id: "+id,true);
         }
@@ -215,33 +224,34 @@ void THZLoggerDevice::doRegister()
   registerSensors(new TtgSensorsList());
   
   registerTempSensors();
-  
-  sensors->add(new TDHT22SensorTemp(dht,"DHT22-TEMP",&messDeltaTemp));
-  sensors->add(new TDHT22SensorHum(dht,"DHT22-HUM",&messDeltaHum));
+
+  writelog("init DHT22");
+  dht.setup(dhtPIN, dhtTYPE);  
+
+  writelog("add DHT22 sensors");
+  //sensors->add(new TDHT22SensorTemp(&dht,"DHT22-TEMP",&messDeltaTemp));
+  //sensors->add(new TDHT22SensorHum(&dht,"DHT22-HUM",&messDeltaHum));
 
   TGDevice::doRegister();
-  
+    
   deviceconfig->addConfig("messDeltaTemp","F",0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);   
   deviceconfig->addConfig("messDeltaHum","F",0,false,"Delta ab der eine Luftfeuchtigkeit reported wird",NULL,NULL,&messDeltaHum);
 }
 
 void THZLoggerDevice::doSetup()
 {
-  writelog("THZLoggerDevice::doSetup()");
+  //writelog("THZLoggerDevice::doSetup()");
   TGDevice::doSetup();
-
-  writelog("init DHT22");
-  dht->setup(dhtPIN, dhtTYPE);  
 }
 
-THZLoggerDevice *device = new THZLoggerDevice(deviceVersion);
+THZLoggerDevice device(deviceVersion);
 
 void setup(void) 
 {
-  device->deviceSetup();  
+  device.deviceSetup();  
 }
 
 void loop(void) 
 {
-  device->deviceLoop();
+  device.deviceLoop();
 }
