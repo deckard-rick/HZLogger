@@ -36,7 +36,8 @@
  * 21.10.2019 DHT22 getestet, funktioniert, wenn mann ihn richtig anschließt
  * 21.10.2019 Config Modul geändert, man darf kein sizeof verwenden, für Array Größen und auf == aufpassen, vom Prinzip her tut es aber!
  * 23.10.2019 Umbau des HZLoggers auf das tgDeviceModul
- * 
+ * 30.10.2019 ging eigentlich gut, Device stürzte aber immer schnell wieder ab, vermutlich Speicherprobleme mit Strings, tgDevice wird umgebaut auf char* (tgOutBuffer)
+ *    
  * Allgemeine Hinweise: https://www.mikrocontroller-elektronik.de/nodemcu-esp8266-tutorial-wlan-board-arduino-ide/
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
  *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de 
@@ -108,8 +109,8 @@ DHTesp dht;
 class THZLoggerDevice : public TGDevice
 {
   public:
-    THZLoggerDevice(const String& aDeviceVersion):TGDevice(aDeviceVersion)
-      { initChar(deviceID,16,"HZLOGzz");
+    THZLoggerDevice(const char* aDeviceVersion):TGDevice(aDeviceVersion)
+      { initChar(deviceid,16,"HZLOGzz");
         initChar(wifiSSID,16,"BUISNESSZUM");
         initChar(wifiPWD ,32,"FE1996#ag!2008");
         initChar(host    ,32, "");
@@ -118,7 +119,6 @@ class THZLoggerDevice : public TGDevice
   protected:
     void doHello();
     void doRegister();
-    void doSetup();
   private:
     float messDeltaTemp = 2;
     float messDeltaHum = 5;
@@ -153,10 +153,7 @@ void THZLoggerDevice::initChar(char* t_field, const int t_maxlen, const String& 
 
 void THZLoggerDevice::doHello()
 {
-  writelog("");
-  writelog("HZLogger");
-  writelog("");
-  
+  writelog("***HZLogger***");
   TGDevice::doHello();
 }
 
@@ -182,18 +179,13 @@ String THZLoggerDevice::adrToId(DeviceAddress devAdr)
 
 void THZLoggerDevice::registerTempSensors() 
 {
-  writelog("register Temperature Sensors - Start");
-
   writelog("init DS18B20");
-  //oneWire = new OneWire(oneWirePin);
-  //ds18b20 = new DallasTemperature (oneWire);
   ds18b20.begin();
   delay(500);
 
   /* Lesen der aktuellen Anzahl */
-  writelog("read DS18B20 Count");
   int cntDev = ds18b20.getDeviceCount();
-  writelog("cntDev:"+String(cntDev));
+  writelog("DS18B20 Count:"+String(cntDev));
 
   /* Die Devices als Sensoren einfach einsortieren, sie werden immer in 
    *  der glechen Reihenfolge geliefert und ändern sich ja selten.
@@ -204,14 +196,12 @@ void THZLoggerDevice::registerTempSensors()
       if( ds18b20.getAddress(devAdr, i))
         {
           String id = adrToId(devAdr);
-          //sensors->add(new TDS18B20Sensor(&ds18b20,devAdr,id,&messDeltaTemp));
+          sensors->add(new TDS18B20Sensor(&ds18b20,devAdr,id,&messDeltaTemp));
 
           writelog("id: "+id,true);
         }
     }
-  writelog("register Temperature Sensors - End");
 }
-
 
 void THZLoggerDevice::doRegister()
 {
@@ -221,27 +211,19 @@ void THZLoggerDevice::doRegister()
   //the HZLogger is working fix a fixed numer of wired temperature sensores, Ich we change thies sensors we
   //can reboot the HZLooger without any Problem.
   
-  registerSensors(new TtgSensorsList());
+  registerSensorsList(new TtgSensorsList());
   
   registerTempSensors();
 
   writelog("init DHT22");
   dht.setup(dhtPIN, dhtTYPE);  
-
-  writelog("add DHT22 sensors");
-  //sensors->add(new TDHT22SensorTemp(&dht,"DHT22-TEMP",&messDeltaTemp));
-  //sensors->add(new TDHT22SensorHum(&dht,"DHT22-HUM",&messDeltaHum));
+  sensors->add(new TDHT22SensorTemp(&dht,"DHT22-TEMP",&messDeltaTemp));
+  sensors->add(new TDHT22SensorHum(&dht,"DHT22-HUM",&messDeltaHum));
 
   TGDevice::doRegister();
     
   deviceconfig->addConfig("messDeltaTemp","F",0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);   
   deviceconfig->addConfig("messDeltaHum","F",0,false,"Delta ab der eine Luftfeuchtigkeit reported wird",NULL,NULL,&messDeltaHum);
-}
-
-void THZLoggerDevice::doSetup()
-{
-  //writelog("THZLoggerDevice::doSetup()");
-  TGDevice::doSetup();
 }
 
 THZLoggerDevice device(deviceVersion);
