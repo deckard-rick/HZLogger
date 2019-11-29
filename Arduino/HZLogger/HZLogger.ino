@@ -1,4 +1,4 @@
-  /*
+ /*
  * 12.06.2018 Anpassung zur Prüfung an welchen Ports wir eine Signal haben.
  *            dazu braucht es das .begin, sonst wird der getDeviceCount() 
  *            nicht aktualisiert
@@ -37,6 +37,9 @@
  * 21.10.2019 Config Modul geändert, man darf kein sizeof verwenden, für Array Größen und auf == aufpassen, vom Prinzip her tut es aber!
  * 23.10.2019 Umbau des HZLoggers auf das tgDeviceModul
  * 30.10.2019 ging eigentlich gut, Device stürzte aber immer schnell wieder ab, vermutlich Speicherprobleme mit Strings, tgDevice wird umgebaut auf char* (tgOutBuffer)
+ * 24.11.2019 Umbau auf TGCharbuffer war mühsamm, weil es viele Stellen betrifft, aber erfolgreich
+ *            Sensor schmierte aber nach x Sekunden messen immer wieder ab => YIELD() also genauer yield() notwendig, damit nicht die Watchdog des ESP automatisch einen Restart durchführt
+ *            Dashboard mit Values und json.Values tut, bin nun am testen des Config-Formulars 
  *    
  * Allgemeine Hinweise: https://www.mikrocontroller-elektronik.de/nodemcu-esp8266-tutorial-wlan-board-arduino-ide/
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
@@ -46,6 +49,8 @@
 */
 
 #include <tgDevice.hpp>
+#include <tgLogging.hpp>
+
 #include <OneWire.h>
 #include <DallasTemperature.h> 
 #include <DHTesp.h>
@@ -72,11 +77,12 @@ const int dhtPIN = 4;     // what digital pin the DHT22 is conected to
 class TDS18B20Sensor : public TtgSensor
 {
   public:
-    TDS18B20Sensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const String& aId, float *apDelta):TtgSensor(aId,apDelta) 
+    TDS18B20Sensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const char* aId, float *apDelta):TtgSensor(aId,apDelta) 
                   {ds18b20=t_ds18b20; 
                    for (int i=0; i<8; ++i) address[i] = t_address[i];};
+    //void initSensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const char* aId, float *apDelta);
   protected:
-    float doGetMessValue();
+    void doGetMessValue(float* pvalue);
   private:
     DallasTemperature *ds18b20;
     DeviceAddress address  ;
@@ -85,9 +91,9 @@ class TDS18B20Sensor : public TtgSensor
 class TDHT22SensorTemp : public TtgSensor
 {
   public:
-    TDHT22SensorTemp(DHTesp *aDht, const String& aId, float *apDelta):TtgSensor(aId,apDelta) {dht=aDht;};
+    TDHT22SensorTemp(DHTesp *aDht, const char* aId, float *apDelta):TtgSensor(aId,apDelta) {dht=aDht;};
   protected:
-    float doGetMessValue();
+    void doGetMessValue(float* pvalue);
   private:
     DHTesp *dht;  
 };
@@ -95,9 +101,9 @@ class TDHT22SensorTemp : public TtgSensor
 class TDHT22SensorHum : public TtgSensor
 {
   public:
-    TDHT22SensorHum(DHTesp *aDht, const String& aId, float *apDelta):TtgSensor(aId,apDelta) {dht=aDht;};
+    TDHT22SensorHum(DHTesp *aDht, char* aId, float *apDelta):TtgSensor(aId,apDelta) {dht=aDht;};
   protected:
-    float doGetMessValue();
+    void doGetMessValue(float* pvalue);
   private:
     DHTesp *dht;  
 };
@@ -105,6 +111,8 @@ class TDHT22SensorHum : public TtgSensor
 OneWire oneWire(ONE_WRIE_BUS);
 DallasTemperature ds18b20(&oneWire);
 DHTesp dht;
+
+//TDS18B20Sensor db18b20Sensors[10];
 
 class THZLoggerDevice : public TGDevice
 {
@@ -122,25 +130,40 @@ class THZLoggerDevice : public TGDevice
   private:
     float messDeltaTemp = 2;
     float messDeltaHum = 5;
-    String adrToId(DeviceAddress devAdr);
+    void adrToId(DeviceAddress devAdr, char* id);
     void initChar(char* t_field, const int t_maxlen, const String& value);
     void registerTempSensors();
 };
 
-float TDS18B20Sensor::doGetMessValue()
+/*
+void TDS18B20Sensor::initSensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const char* aId, float *apDelta)
 {
+  ds18b20=t_ds18b20; 
+  for (int i=0; i<8; ++i) address[i] = t_address[i];
+
+  TtgSensor::initSensor(aId,apDelta);
+}
+*/                   
+
+void TDS18B20Sensor::doGetMessValue(float* pvalue)
+{
+  //TGLogging::get()->write("TDS18B20Sensor::doGetMessValue A")->crlf();
   ds18b20->requestTemperaturesByAddress(address);
-  return ds18b20->getTempC(address);
+  //TGLogging::get()->write("TDS18B20Sensor::doGetMessValueB")->crlf();
+  *pvalue = ds18b20->getTempC(address);
+  //TGLogging::get()->write("TDS18B20Sensor::doGetMessValue C")->crlf();
 }
 
-float TDHT22SensorTemp::doGetMessValue()
+void TDHT22SensorTemp::doGetMessValue(float* pvalue)
 {
-  return dht->getTemperature();
+  //TGLogging::get()->write("TDHT22SensorTemp::doGetMessValue")->crlf();
+  *pvalue = dht->getTemperature();
 }
 
-float TDHT22SensorHum::doGetMessValue()
+void TDHT22SensorHum::doGetMessValue(float* pvalue)
 {
-  return dht->getHumidity();
+  //TGLogging::get()->write("TDHT22SensorHum::doGetMessValue")->crlf();
+  *pvalue = dht->getHumidity();
 }
 
 void THZLoggerDevice::initChar(char* t_field, const int t_maxlen, const String& value)
@@ -153,39 +176,33 @@ void THZLoggerDevice::initChar(char* t_field, const int t_maxlen, const String& 
 
 void THZLoggerDevice::doHello()
 {
-  writelog("***HZLogger***");
+  TGLogging::get()->write("***HZLogger***")->crlf();
   TGDevice::doHello();
 }
 
-String THZLoggerDevice::adrToId(DeviceAddress devAdr)
+void THZLoggerDevice::adrToId(DeviceAddress devAdr, char* id)
 {
-  String erg = "Ox";
+  strcpy(id,"Ox");
   char hex[2];
   
   for (int i=0; i<8; i++)
-    {
-      sprintf(hex,"%2X",devAdr[i]);
-      erg += String(hex);
-    }
-  for (int i=0; i<erg.length(); ++i)
-    {
-      if (erg[i]==' ') 
-        {
-          erg[i] = '0';  
-        }
-    }  
-  return erg;
+    sprintf(id+(i*2),"%2X",devAdr[i]);
+  for (int i=0; i<strlen(id); ++i)
+    if (id[i]==' ')
+      {
+        id[i] = '0';  
+      }
 }
 
 void THZLoggerDevice::registerTempSensors() 
 {
-  writelog("init DS18B20");
+  TGLogging::get()->write("init DS18B20")->crlf();
   ds18b20.begin();
   delay(500);
 
   /* Lesen der aktuellen Anzahl */
   int cntDev = ds18b20.getDeviceCount();
-  writelog("DS18B20 Count:"+String(cntDev));
+  TGLogging::get()->write("DS18B20 Count:")->write(cntDev)->crlf();
 
   /* Die Devices als Sensoren einfach einsortieren, sie werden immer in 
    *  der glechen Reihenfolge geliefert und ändern sich ja selten.
@@ -193,12 +210,15 @@ void THZLoggerDevice::registerTempSensors()
   for(int i=0; i < cntDev; i++)
     {
       DeviceAddress devAdr; //Die DeviceAddress ist ein uint[8]
+      char id[20]; id[0]='\0';
       if( ds18b20.getAddress(devAdr, i))
         {
-          String id = adrToId(devAdr);
+          adrToId(devAdr,id);
           sensors->add(new TDS18B20Sensor(&ds18b20,devAdr,id,&messDeltaTemp));
+          //db18b20Sensors[i].initSensor(&ds18b20,devAdr,id,&messDeltaTemp);
+          //sensors->add(&(db18b20Sensors[i]));
 
-          writelog("id: "+id,true);
+          TGLogging::get()->write("id: ")->write(id)->crlf();
         }
     }
 }
@@ -215,15 +235,15 @@ void THZLoggerDevice::doRegister()
   
   registerTempSensors();
 
-  writelog("init DHT22");
+  TGLogging::get()->write("init DHT22")->crlf();
   dht.setup(dhtPIN, dhtTYPE);  
   sensors->add(new TDHT22SensorTemp(&dht,"DHT22-TEMP",&messDeltaTemp));
   sensors->add(new TDHT22SensorHum(&dht,"DHT22-HUM",&messDeltaHum));
 
   TGDevice::doRegister();
     
-  deviceconfig->addConfig("messDeltaTemp","F",0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);   
-  deviceconfig->addConfig("messDeltaHum","F",0,false,"Delta ab der eine Luftfeuchtigkeit reported wird",NULL,NULL,&messDeltaHum);
+  deviceconfig->addConfig("messDeltaTemp",'F',0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);   
+  deviceconfig->addConfig("messDeltaHum",'F',0,false,"Delta ab der eine Luftfeuchtigkeit reported wird",NULL,NULL,&messDeltaHum);
 }
 
 THZLoggerDevice device(deviceVersion);
