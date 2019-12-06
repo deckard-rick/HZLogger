@@ -33,35 +33,35 @@ class iotDeviceModel extends baseModel
 	parent::doGetListFields();
 	$this->listfields['show'] = 'Show';
   }
-  
+
   protected function doGetCalcFields($rec)
   {
 	$calcFields = parent::doGetCalcFields($rec);
 	$calcFields['show'] = '<a href="/config/iotdevice.php?show/dvkey/'.$rec['dvkey'].'">Show</a>';
 	return $calcFields;
   }
-  
-  public function getConfigJSON($dvkey,&ipadress)
+
+  public function getConfigJSON($dvkey,$ipadress)
   {
     $erg = array();
     $sql = 'select deviceId, ip from iotdevice where dvkey='.$dvkey;
-	$vals = $this->loadSQL($sql);
+	  $vals = $this->loadSQL($sql);
     $erg['Version'] = 'tgHZ04';
-	$erg['DeviceID'] = $vals['devideID'];
-	$ipaddress = $vals['ip'];
-	$erg['config'] = array();
+	  $erg['DeviceID'] = $vals['devideID'];
+	  $ipaddress = $vals['ip'];
+	  $erg['config'] = array();
     $sql = 'select fieldname, wert from iotconfig where dvkey='.$dvkey.' order by fielname';
     $configs = $this->loadSQL($sql);
     foreach($configs as $config)
 	  $erg['config'][$config['fieldname']] = $config['wert'];
-	  
+
     return json_encode($erg);
-  }	  
+  }
 
   /**
   * Das zu Grunde liegende JSON Model ist, dabei werden die values in values übergeben
   * V3 (07.10.2019)
-  * json {version:<version>, DeviceID:<deviceID>, values { 
+  * json {version:<version>, DeviceID:<deviceID>, values {
   *      V1: {id:<id>, anschluss:<anschluss>,sec:<sec>,value:<value>},
   *      V2: ..... }}
   * wobei
@@ -79,7 +79,7 @@ class iotDeviceModel extends baseModel
 	$dvkey = $this->fetchValue($sql);
 	if (isnull($dvkey) || ($dvkey <= 0))
 	  return;
-	
+
     $time = date('Y-m-d H:i:s');
 	foreach($values as $sensor => $data)
 	  {
@@ -93,7 +93,7 @@ class iotDeviceModel extends baseModel
 	    if (isnull($sekey) || ($sekey <= 0))
 	      return;
 
-	    $sql = 'update iotsensor set lastmeasure=\''.$time.'\', lastvalue='.$values['value']
+	    $sql = 'update iotsensor set lastmeasure=\''.$time.'\', lastvalue='.$values['value'].
 			       ' where sekey = '.$sekey;
 		$this->execSQL($sql);
 
@@ -102,20 +102,20 @@ class iotDeviceModel extends baseModel
 		$this->execSQL($sql);
 	  }
   }
-  
+
   public function saveConfig($version,$dvid,$values)
   {
 	$sql = 'select dvkey from iotdevice where dvid=\''.$dvid.'\'';
 	$dvkey = $this->fetchValue($sql);
 	if (isnull($dvkey) || ($dvkey <= 0))
 	  return;
-	
+
 	$sql = 'update iotconfig set found = \'N\' where dvkey = '.$dvkey;
 	$this->execSQL($sql);
 
 	$sql = 'select cfkey, code from iotconfig where dvkey = '.$dvkey.' order by code';
 	$configs = $this->loadSQL($sql);
-	
+
 	foreach($values as $cfgName => $cfgValue)
 	  {
 	    $sql = 'select cfkey from iotconfig where fieldname = \''.$cfgName.'\'';
@@ -127,11 +127,11 @@ class iotDeviceModel extends baseModel
 	      $sql = 'update iotconfig set wert=\''.$cfgValue.'\',found=\'Y\' where cfkey = '.$cfkey;
 		$this->execSQL($sql);
 	  }
-	  
-	$sql = 'delete from iotconfig where dvkey = '.$dvkey' and  found = \'N\'';
-	$this->execSQL($sql);	  
+
+	$sql = 'delete from iotconfig where dvkey = '.$dvkey.' and  found = \'N\'';
+	$this->execSQL($sql);
   }
-  
+
 }
 
 ?>

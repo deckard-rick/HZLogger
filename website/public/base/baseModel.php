@@ -4,7 +4,7 @@
 *
 * unterstützt das auflisten, anlegen, editieren und löschen von Daten
 * einer Datenbank-Tabelle
-* 
+*
 * @author Andreas Tengicki
 * @copyright free, keine urheberrechtliche Schöpfungshöhe
 * @version 1.1 (Juni 2018)
@@ -24,7 +24,7 @@ class baseModel
   public $lookups = array();
   public $listfields = null;
   public $formfields = null;
-  
+
   /**
   * baut die Verbindung zur Datenbank auf und bestimmt die Metadaten der verwendeten Tabelle
   * dabei wird automatisch erkannt
@@ -34,38 +34,38 @@ class baseModel
   */
   protected function init()
   {
-	date_default_timezone_set('Europe/Berlin');
+	  date_default_timezone_set('Europe/Berlin');
     $this->db = new mysqli('localhost','root','default','tengicki');
 
 	if ($this->tableName != '')
 	  {
-	    $sql = 'SHOW FULL COLUMNS FROM '.$this->tableName;  
+	    $sql = 'SHOW FULL COLUMNS FROM '.$this->tableName;
         $res = $this->db->query($sql);
-        $metadata = $res->fetch_all(MYSQLI_ASSOC); 
-		
+        $metadata = $res->fetch_all(MYSQLI_ASSOC);
+
 		$this->metadata = array();
 		$this->primkey = '';
 		$fields = array();
-		
+
 		foreach ($metadata as $meta)
 		  {
 			$fn = $meta['Field'];
 			unset($meta['Field']);
 		    $this->metadata[$fn] = $meta;
-			$this->metadata[$fn]['readonly'] = false; 
-			
+			$this->metadata[$fn]['readonly'] = false;
+
 			if ($meta['Key'] == 'PRI')
 			  $this->primkey = $fn;
 			if ($meta['Key'] == '')
 			  {
-			    if ($meta['Comment'] != '')	
+			    if ($meta['Comment'] != '')
 			      $this->metadata[$fn]['label'] = $meta['Comment'];
 			    else
 			      $this->metadata[$fn]['label'] = $fn;
 			    $fields[$fn] = $this->metadata[$fn]['label'];
 			  }
 		  }
-		  
+
 		$this->formfields = $fields;
 		$this->doGetFormFields();
 		$this->listfields = $fields;
@@ -81,7 +81,7 @@ class baseModel
   {
 	$this->db->close();
   }
-  
+
   /**
   * verkürzte Schreibweise, für die Escape Funktion
   *
@@ -92,7 +92,7 @@ class baseModel
   {
     return $this->db->escape_string($s);
   }
-  
+
   protected function getLoadSQL()
   {
 	  $erg = 'select * from '.$this->tableName;
@@ -104,7 +104,7 @@ class baseModel
 	  $erg = '';
 	  return $erg;
   }
-  
+
   public function load($squery)
   {
 	//echo '<p>load squery: '.print_r($squery,true).'</p>';
@@ -114,13 +114,13 @@ class baseModel
 	  $cond .= $this->es($squery[$i]).'='.$this->sqlValue($squery[$i],$squery[$i+1]).' and ';
     if ($cond != '')
 	  $sql .= ' where '.substr($cond,0,strlen($cond)-4);
-	
+
 	$order = $this->getLoadOrder();
 	if ($order != '')
-	  $sql .= ' order by '.$order; 
+	  $sql .= ' order by '.$order;
 
     $this->records = $this->loadSQL($sql);
-	
+
 	for($i=0; $i<count($this->records); $i++)
 	  {
 		$calcFields = $this->doGetCalcFields($this->records[$i]);
@@ -128,7 +128,7 @@ class baseModel
 		//echo '<pre>'.$i.'</pre>';
 		//echo '<pre>'.$this->records[$i].'</pre>';
 		//echo '<pre>'.$calcFields.'</pre>';
-	  }  
+	  }
   }
 
   /**
@@ -138,16 +138,16 @@ class baseModel
   *
   * @param $fn Wenn Wert aus einem Feld, dann welches
   * @param $values, wenn null, dann erster record, wenn Array dann values[$fn] sonst direkt
-  * @return SQL-fähiger String
+  * @return SQL-faehiger String
   */
   private function sqlValue($fn,$values)
   {
-	/* Wert bestimmen s.o. */  
+	/* Wert bestimmen s.o. */
     if (is_null($values))
 	  $val = $this->records[0][$fn];
     else if (is_array($values))
 	  $val = $values[$fn];
-    else 
+    else
 	  $val = $values;
     /* Wert escapen */
     $val = $this->es($val);
@@ -172,16 +172,16 @@ class baseModel
   */
   protected function doGetListFields()
   {
-  }	
+  }
 
   protected function doGetFormFields()
   {
-  }	
+  }
 
   protected function doGetCalcFields($rec)
   {
 	  return array();
-  }	
+  }
 
   /**
   * erzeuge ein INSERT-SQL-Befehl
@@ -204,7 +204,7 @@ class baseModel
 	//Nun fertig zusammenbauen
 	return substr($ins,0,strlen($ins)-1).') '.substr($vals,0,strlen($vals)-1).')';
   }
-  
+
   /**
   * erzeuge ein UPDATE-SQL-Befehl
   * für alle Felder die über Values (meist aus dem $_POST kommen
@@ -228,9 +228,9 @@ class baseModel
 			 $changed = true;
 		   }
 	 $erg = '';
-	 if ($changed) 
+	 if ($changed)
 	   $erg = substr($sql,0,strlen($sql)-1).' where '.$this->primkey.' = '.$_POST[$this->primkey];
-     return $erg; 
+     return $erg;
   }
 
   /**
@@ -245,9 +245,9 @@ class baseModel
 	 $sql = '';
 	 if ($this->records[0][$this->primkey] != '')
        $sql = 'delete from '.$this->tableName.' where '.$this->primkey.' = '.$this->records[0][$this->primkey];
-     return $sql; 
+     return $sql;
   }
-  
+
   /**
   * Ausführen eines SQL, mit Test auf leer und Fehlerausgabe
   *
@@ -264,18 +264,18 @@ class baseModel
   {
     //echo '<pre>loadSQL: '.$sql.'</pre>';
     $res = $this->db->query($sql);
-    return $res->fetch_all(MYSQLI_ASSOC); 
+    return $res->fetch_all(MYSQLI_ASSOC);
   }
-  
+
   protected function fetchValue($sql)
   {
     //echo '<pre>fetchSQL: '.$sql.'</pre>';
     $res = $this->db->query($sql);
-    $row = $res->fetch_array(MYSQLI_NUM); 
+    $row = $res->fetch_array(MYSQLI_NUM);
     //echo '<pre>ROW:'.print_r($row,1).'</pre>';
 	return $row[0];
   }
-  
+
   /**
   * Speichern von Werte eines Satzes
   * Wenn kein Primary Key Wert dabei ist, dann ist es eine Neuanlage
@@ -291,8 +291,8 @@ class baseModel
 	  $sql = $this->getUpdateSQL($values);
 	echo '<pre>SAVE: '.$sql.'</pre>';
 	$this->execSQL($sql);
-  }	  
-  
+  }
+
   /**
   * Löschen des aktuellen Satzes
   */
@@ -301,9 +301,9 @@ class baseModel
     $sql = $this->getDeleteSQL();
     //echo '<pre>DELETE: '.$sql.'</pre>';
 	$this->execSQL($sql);
-	  
+
   }
-  
+
   protected function getTimeArray()
   {
 	  $time = array();
@@ -315,13 +315,13 @@ class baseModel
 	  $time['second'] = date('s');
 	  $erg = array();
 	  $erg['time'] = $time;
-	  
+
 	  return $erg;
   }
-  
+
   public function getJSONDate()
   {
 	  return json_encode($this->getTimeArray());
-  }  
+  }
 }
 ?>
