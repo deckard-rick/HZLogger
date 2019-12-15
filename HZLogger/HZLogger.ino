@@ -1,4 +1,4 @@
- /*
+/*
  * 12.06.2018 Anpassung zur Prüfung an welchen Ports wir eine Signal haben.
  *            dazu braucht es das .begin, sonst wird der getDeviceCount() 
  *            nicht aktualisiert
