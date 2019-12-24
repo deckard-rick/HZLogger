@@ -41,7 +41,9 @@
  *            Sensor schmierte aber nach x Sekunden messen immer wieder ab => YIELD() also genauer yield() notwendig, damit nicht die Watchdog des ESP automatisch einen Restart durchführt
  *            Dashboard mit Values und json.Values tut, bin nun am testen des Config-Formulars 
  * 29.11.2019 weiteres Bug-Fixing. Aber nun funktionieren html und json senden
- * 01.12.2019 configStart aus dem Beispiel zum EEPROM ist Blödsinn, weil dann der Buffer zu klein ist, nun tuts (endlich). *    
+ * 01.12.2019 configStart aus dem Beispiel zum EEPROM ist Blödsinn, weil dann der Buffer zu klein ist, nun tuts (endlich).     
+ * 24.12.2019 WiFi mit TimeOut und startet ggf AcceesPoint
+ * 24.12.2019 Webseite kann Konfiguration via json holen, Device sendet deviceid nicht mehr doppelt.
  * 
  * Allgemeine Hinweise: https://www.mikrocontroller-elektronik.de/nodemcu-esp8266-tutorial-wlan-board-arduino-ide/
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
