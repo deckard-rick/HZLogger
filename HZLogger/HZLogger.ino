@@ -44,6 +44,11 @@
  * 01.12.2019 configStart aus dem Beispiel zum EEPROM ist Blödsinn, weil dann der Buffer zu klein ist, nun tuts (endlich).     
  * 24.12.2019 WiFi mit TimeOut und startet ggf AcceesPoint
  * 24.12.2019 Webseite kann Konfiguration via json holen, Device sendet deviceid nicht mehr doppelt.
+ * 25.12.2019 auch das putconfig von der Webseite tut, Version der Config und DeviceID müssen passen, wifi-Parameter werden nicht verändert.
+ * => Damit ist die erste Fassung tatsächlich vollständig implementiert.
+ * 
+ * TODO
+ *   Verbesserung: ggf putConfig via char* statt String, wird aber selten aufgerufen, daher eher eine Spielerei.
  * 
  * Allgemeine Hinweise: https://www.mikrocontroller-elektronik.de/nodemcu-esp8266-tutorial-wlan-board-arduino-ide/
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
