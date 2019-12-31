@@ -46,9 +46,8 @@
  * 24.12.2019 Webseite kann Konfiguration via json holen, Device sendet deviceid nicht mehr doppelt.
  * 25.12.2019 auch das putconfig von der Webseite tut, Version der Config und DeviceID müssen passen, wifi-Parameter werden nicht verändert.
  * => Damit ist die erste Fassung tatsächlich vollständig implementiert.
- * 
- * TODO
- *   Verbesserung: ggf putConfig via char* statt String, wird aber selten aufgerufen, daher eher eine Spielerei.
+ * 31.12.2019 Jetzt tut auch die Platine, musste noch einige Lötfehler beseitigen, hier noch ein paar kleine Verbesserungen, bzw in der Library
+ *        
  * 
  * Allgemeine Hinweise: https://www.mikrocontroller-elektronik.de/nodemcu-esp8266-tutorial-wlan-board-arduino-ide/
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
@@ -68,7 +67,7 @@
 //int dataPins[13] = {16, 5, 4, 0, 2, 14, 12, 13, 15, 3, 1, 10, 9};
 //Auf der 0 will das Thermometer nicht wir nehmen D1 fü den OneWire Bus
 
-#define ONE_WRIE_BUS 5
+#define ONE_WRIE_BUS 4
 
 //Ist D7 ist RXD2 und mit D8 TXD2 Teil der seriellen Schnittstelle, solange wir sicher so debuggen wollen
 //  können wir D7 und D8 nicht mitbenutzen
@@ -80,7 +79,7 @@
 #define NOVAL -9999
 #endif
 
-const int dhtPIN = 4;     // what digital pin the DHT22 is conected to
+const int dhtPIN = 5;     // what digital pin the DHT22 is conected to
 #define dhtTYPE DHTesp::DHT22   // there are multiple kinds of DHT sensors
 
 class TDS18B20Sensor : public TtgSensor
