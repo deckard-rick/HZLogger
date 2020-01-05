@@ -1,9 +1,9 @@
 /*
  * 12.06.2018 Anpassung zur Prüfung an welchen Ports wir eine Signal haben.
- *            dazu braucht es das .begin, sonst wird der getDeviceCount() 
+ *            dazu braucht es das .begin, sonst wird der getDeviceCount()
  *            nicht aktualisiert
- *            
- * 14.06.2018 Messen von Mittelwerten, und Zeitsteuerung für nicht so häufige Aktionen          
+ *
+ * 14.06.2018 Messen von Mittelwerten, und Zeitsteuerung für nicht so häufige Aktionen
  * 15.06.2018 Einbau der Gültigkeit der Werte
  * 17.06.2018 Einbei der WiFi Verbindung und des WiFi-Servers mit Main und Values
  * 18.06.2018 Abfrage per JSON, Struktur für Konfig-Werte
@@ -17,8 +17,8 @@
  * 23.09.2019 Jetzt unter C:\DatenAndreas\tgsIOT\Arduino\HZLogger und unter git, noch ohne Remote Origin.
  * 30.09.2019 Step1: Umstellung auf OneWire als Bus über die Adressen der TempSensoren, warum bin ich nicht früher drauf gekommen. (aus Japan, im Shinkansen)
  *            Versuche in der ersten Version, hatten ergeben, dass das mit den Korrekturwerten nichts bringt, daher kommt das alles raus
- * 02.10.2019 Step2: DevAddress ist ein uint[8] Feld, da müssen wir eine HexID-wie eine MacAdresse draus machen, 
- *            zudem müssen wir mit records/struct arbeiten und nicht mit Index, die Teile können sich ja verschieben oder ersetzen, dann finden wir die 
+ * 02.10.2019 Step2: DevAddress ist ein uint[8] Feld, da müssen wir eine HexID-wie eine MacAdresse draus machen,
+ *            zudem müssen wir mit records/struct arbeiten und nicht mit Index, die Teile können sich ja verschieben oder ersetzen, dann finden wir die
  *            anderen Informationen nicht mehr
  * 03.10.2019 Verwaltung der Anschlüsse, wir ändern so ein wenig die Philosphie, der Sensor kann sich komplett selbst verwalten
  *            um das EPROM nicht über zubelasten, wird aber nur bei Änderungen geschrieben
@@ -27,8 +27,8 @@
  *            kann es natürlich noch verbessert werden.
  *            Idee ist, alle Konfigwerte über eine Datenstruktur und je eine Lese/Schreib Routine abzuwicklen, (oder ohne), dann kann der Konfig-Teil immer gleich bleiben.
  * 05.10.2019 Datenbasiertes Konfig Handling abgeschlossen, ein paar Verbesserungen am HTML, jetzt ist es gut, es muss nur nochmal getestet werden (wieder daheim dann)
- * 07.10.2019 putConfig mit Ausnahme des Auslesens des POST Bodies mit dem json aus der http Anfrage 
- * 09.10.2019 für den DHT22 brauchen wir auch noch Anschluss Definitionen, sonst beist es sich mit anderen Geräten 
+ * 07.10.2019 putConfig mit Ausnahme des Auslesens des POST Bodies mit dem json aus der http Anfrage
+ * 09.10.2019 für den DHT22 brauchen wir auch noch Anschluss Definitionen, sonst beist es sich mit anderen Geräten
  * 20.10.2019 parallel mit dem tgDevice begonnen, will aber im ersten Schritt den HZLogger normal zum laufen bringen. Bei der Beschäftigung mit GARDENMain hat sich aber
  *            ergeben, das es genügt mit ID und DeviceID zu arbeiten, die ganze Anschuss Geschichte kann eigentlich wieder raus.
  * 21.10.2019 Mit PullUp Wiederstand 4,7kOhm kann er nur zwei Temp Sensoren betreiben. Mit 700Ohm geht es bis vier Sensoren, der 5te will nicht, ich vermute da kommen
@@ -39,20 +39,21 @@
  * 30.10.2019 ging eigentlich gut, Device stürzte aber immer schnell wieder ab, vermutlich Speicherprobleme mit Strings, tgDevice wird umgebaut auf char* (tgOutBuffer)
  * 24.11.2019 Umbau auf TGCharbuffer war mühsamm, weil es viele Stellen betrifft, aber erfolgreich
  *            Sensor schmierte aber nach x Sekunden messen immer wieder ab => YIELD() also genauer yield() notwendig, damit nicht die Watchdog des ESP automatisch einen Restart durchführt
- *            Dashboard mit Values und json.Values tut, bin nun am testen des Config-Formulars 
+ *            Dashboard mit Values und json.Values tut, bin nun am testen des Config-Formulars
  * 29.11.2019 weiteres Bug-Fixing. Aber nun funktionieren html und json senden
- * 01.12.2019 configStart aus dem Beispiel zum EEPROM ist Blödsinn, weil dann der Buffer zu klein ist, nun tuts (endlich).     
+ * 01.12.2019 configStart aus dem Beispiel zum EEPROM ist Blödsinn, weil dann der Buffer zu klein ist, nun tuts (endlich).
  * 24.12.2019 WiFi mit TimeOut und startet ggf AcceesPoint
  * 24.12.2019 Webseite kann Konfiguration via json holen, Device sendet deviceid nicht mehr doppelt.
  * 25.12.2019 auch das putconfig von der Webseite tut, Version der Config und DeviceID müssen passen, wifi-Parameter werden nicht verändert.
  * => Damit ist die erste Fassung tatsächlich vollständig implementiert.
  * 31.12.2019 Jetzt tut auch die Platine, musste noch einige Lötfehler beseitigen, hier noch ein paar kleine Verbesserungen, bzw in der Library
- *        
- * 
+ * 04.01.2020 im Rahmen der Dokumentation noch ein wenig geglättet
+ *
+ *
  * Allgemeine Hinweise: https://www.mikrocontroller-elektronik.de/nodemcu-esp8266-tutorial-wlan-board-arduino-ide/
  * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
- *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de 
- * 
+ *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de
+ *
  * (C) Andreas Tengicki 2018,2019
 */
 
@@ -60,7 +61,7 @@
 #include <tgLogging.hpp>
 
 #include <OneWire.h>
-#include <DallasTemperature.h> 
+#include <DallasTemperature.h>
 #include <DHTesp.h>
 
 //Alle 13 GPIO Pins von D0 bis D10, SD3, SD2
@@ -82,38 +83,38 @@
 const int dhtPIN = 5;     // what digital pin the DHT22 is conected to
 #define dhtTYPE DHTesp::DHT22   // there are multiple kinds of DHT sensors
 
-class TDS18B20Sensor : public TtgSensor
+class TDS18B20Sensor : public TGSensor
 {
   public:
-    TDS18B20Sensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const char* aId, float *apDelta):TtgSensor(aId,apDelta) 
-                  {ds18b20=t_ds18b20; 
+    TDS18B20Sensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const char* aId, float *apDelta):TGSensor(aId,apDelta)
+                  {ds18b20=t_ds18b20;
                    for (int i=0; i<8; ++i) address[i] = t_address[i];};
     //void initSensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const char* aId, float *apDelta);
   protected:
-    void doGetMessValue(float* pvalue);
+    void dogetvalue();
   private:
     DallasTemperature *ds18b20;
     DeviceAddress address  ;
 };
 
-class TDHT22SensorTemp : public TtgSensor
+class TDHT22SensorTemp : public TGSensor
 {
   public:
-    TDHT22SensorTemp(DHTesp *aDht, const char* aId, float *apDelta):TtgSensor(aId,apDelta) {dht=aDht;};
+    TDHT22SensorTemp(DHTesp *aDht, const char* aId, float *apDelta):TGSensor(aId,apDelta) {dht=aDht;};
   protected:
-    void doGetMessValue(float* pvalue);
+    void dogetvalue();
   private:
-    DHTesp *dht;  
+    DHTesp *dht;
 };
 
-class TDHT22SensorHum : public TtgSensor
+class TDHT22SensorHum : public TGSensor
 {
   public:
-    TDHT22SensorHum(DHTesp *aDht, char* aId, float *apDelta):TtgSensor(aId,apDelta) {dht=aDht;};
+    TDHT22SensorHum(DHTesp *aDht, char* aId, float *apDelta):TGSensor(aId,apDelta) {dht=aDht;};
   protected:
-    void doGetMessValue(float* pvalue);
+    void dogetvalue();
   private:
-    DHTesp *dht;  
+    DHTesp *dht;
 };
 
 OneWire oneWire(ONE_WRIE_BUS);
@@ -127,11 +128,11 @@ class THZLoggerDevice : public TGDevice
   public:
     THZLoggerDevice(const char* aDeviceVersion):TGDevice(aDeviceVersion)
       { initChar(deviceid,16,"HZLOGzz");
-        initChar(wifiSSID,16,"BUISNESSZUM");
-        initChar(wifiPWD ,32,"FE1996#ag!2008");
+        initChar(wifiSSID,16,"YOURSSID");
+        initChar(wifiPWD ,32,"YOURWIFIPASSWORD");
         initChar(host    ,32, "");
-      }  
-        
+      }
+
   protected:
     void doHello();
     void doRegister();
@@ -146,32 +147,32 @@ class THZLoggerDevice : public TGDevice
 /*
 void TDS18B20Sensor::initSensor(DallasTemperature *t_ds18b20, DeviceAddress t_address, const char* aId, float *apDelta)
 {
-  ds18b20=t_ds18b20; 
+  ds18b20=t_ds18b20;
   for (int i=0; i<8; ++i) address[i] = t_address[i];
 
   TtgSensor::initSensor(aId,apDelta);
 }
-*/                   
+*/
 
-void TDS18B20Sensor::doGetMessValue(float* pvalue)
+void TDS18B20Sensor::dogetvalue()
 {
   //TGLogging::get()->write("TDS18B20Sensor::doGetMessValue A")->crlf();
   ds18b20->requestTemperaturesByAddress(address);
   //TGLogging::get()->write("TDS18B20Sensor::doGetMessValueB")->crlf();
-  *pvalue = ds18b20->getTempC(address);
+  newValue = ds18b20->getTempC(address);
   //TGLogging::get()->write("TDS18B20Sensor::doGetMessValue C")->crlf();
 }
 
-void TDHT22SensorTemp::doGetMessValue(float* pvalue)
+void TDHT22SensorTemp::dogetvalue()
 {
   //TGLogging::get()->write("TDHT22SensorTemp::doGetMessValue")->crlf();
-  *pvalue = dht->getTemperature();
+  newValue = dht->getTemperature();
 }
 
-void TDHT22SensorHum::doGetMessValue(float* pvalue)
+void TDHT22SensorHum::dogetvalue()
 {
   //TGLogging::get()->write("TDHT22SensorHum::doGetMessValue")->crlf();
-  *pvalue = dht->getHumidity();
+  newValue = dht->getHumidity();
 }
 
 void THZLoggerDevice::initChar(char* t_field, const int t_maxlen, const String& value)
@@ -192,17 +193,17 @@ void THZLoggerDevice::adrToId(DeviceAddress devAdr, char* id)
 {
   strcpy(id,"Ox");
   char hex[2];
-  
+
   for (int i=0; i<8; i++)
     sprintf(id+(i*2),"%2X",devAdr[i]);
   for (int i=0; i<strlen(id); ++i)
     if (id[i]==' ')
       {
-        id[i] = '0';  
+        id[i] = '0';
       }
 }
 
-void THZLoggerDevice::registerTempSensors() 
+void THZLoggerDevice::registerTempSensors()
 {
   TGLogging::get()->write("init DS18B20")->crlf();
   ds18b20.begin();
@@ -212,7 +213,7 @@ void THZLoggerDevice::registerTempSensors()
   int cntDev = ds18b20.getDeviceCount();
   TGLogging::get()->write("DS18B20 Count:")->write(cntDev)->crlf();
 
-  /* Die Devices als Sensoren einfach einsortieren, sie werden immer in 
+  /* Die Devices als Sensoren einfach einsortieren, sie werden immer in
    *  der glechen Reihenfolge geliefert und ändern sich ja selten.
    */
   for(int i=0; i < cntDev; i++)
@@ -238,30 +239,30 @@ void THZLoggerDevice::doRegister()
   //In first version we have a dynamic process fo alocatig the temperature sensors. But this is not necessary
   //the HZLogger is working fix a fixed numer of wired temperature sensores, Ich we change thies sensors we
   //can reboot the HZLooger without any Problem.
-  
-  registerSensorsList(new TtgSensorsList());
-  
+
+  registerSensorsList(new TGSensorsList());
+
   registerTempSensors();
 
   TGLogging::get()->write("init DHT22")->crlf();
-  dht.setup(dhtPIN, dhtTYPE);  
+  dht.setup(dhtPIN, dhtTYPE);
   sensors->add(new TDHT22SensorTemp(&dht,"DHT22-TEMP",&messDeltaTemp));
   sensors->add(new TDHT22SensorHum(&dht,"DHT22-HUM",&messDeltaHum));
 
   TGDevice::doRegister();
-    
-  deviceconfig->addConfig("messDeltaTemp",'F',0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);   
+
+  deviceconfig->addConfig("messDeltaTemp",'F',0,false,"Delta ab der eine Temperatur reported wird",NULL,NULL,&messDeltaTemp);
   deviceconfig->addConfig("messDeltaHum",'F',0,false,"Delta ab der eine Luftfeuchtigkeit reported wird",NULL,NULL,&messDeltaHum);
 }
 
 THZLoggerDevice device(deviceVersion);
 
-void setup(void) 
+void setup(void)
 {
-  device.deviceSetup();  
+  device.deviceSetup();
 }
 
-void loop(void) 
+void loop(void)
 {
   device.deviceLoop();
 }
