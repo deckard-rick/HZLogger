@@ -1,27 +1,27 @@
 HZLogger
 ========
 
-Unsere L¸ftung bzw. Heizungsanlage ist 2008 gekauft, 2009 eingebaut, die Elektronik gelˆtet
+Unsere L√ºftung bzw. Heizungsanlage ist 2008 gekauft, 2009 eingebaut, die Elektronik ist
 ohne Schnittstellenzugang (zumindestens kein offizieller oder dokumentierter) und die Firma
 die es gebaut hat, ist pleite bzw. gibt es nicht mehr.
-Der Hersteller der Anlage Paul W‰rmepumpen gibt auch keinen richtigen Support. Das 24V Netzteil
+Der Hersteller der Anlage Paul W√§rmepumpen gibt auch keinen richtigen Support. Das 24V Netzteil
 ist bereits ausgefallen und durch ein externes Ersatz, andere Fehler werden folgen.
 
-Damit wird es unausweichlich eine vern¸nftige eigene Steuerung daf¸r einzusetzen. Daf¸r muss man aber
-verstehen was passiert. Die Steuerung sp‰ter kann man selber lˆten, oder einen "controllino" oder 
-‰hnliches einsetzen.
+Damit wird es unausweichlich eine vern√ºnftige eigene Steuerung daf√ºr einzusetzen. Daf√ºr muss man aber
+verstehen was passiert. Die Steuerung sp√§ter kann man selber l√∂ten, oder einen "controllino" oder
+√§hnliches einsetzen.
 
-Erster Schritt ist zu ¸berwachen was die Anlage tut.
+Erster Schritt ist zu √ºberwachen was die Anlage tut.
 
 Also plazieren wir 10 Temperatur Sensoren und zeichnen auf.
 
-Gleichzeitig ist das mein erstes richtig eigenes ESP8622 Projekt, mit Lˆten, Arduino Programmierung
-und dazugehˆriger Verwaltung im Web.
+Gleichzeitig ist das mein erstes richtig eigenes ESP8622 Projekt, mit L√∂ten, Arduino Programmierung
+und dazugeh√∂riger Verwaltung im Web.
 
-gefundene Lˆsung:
+gefundene L√∂sung:
 -----------------
 Bis zu 12 TempSensoren DS1820 an *einem* OneWire Bus. Dazu ein DHT22 der Temperatur und Luftfeuchtigkeit aus
-dem Raum liefert. Ein Spannungwandler 24V->5V komplementiert das Board. Kommuniziert wird ¸ber das eingebaute
+dem Raum liefert. Ein Spannungwandler 24V->5V komplementiert das Board. Kommuniziert wird √ºber das eingebaute
 WLAN des ESP8622.
 
 Probleme:
@@ -33,3 +33,18 @@ Probleme:
   nicht begriffen hatte.
 
 7.10.2019
+
+eigentlich war alles viel schlimmer (ist halt so wenn man keine Ahnung hat)
+* Schaltung ging nicht weil
+* * Platine schlecht gel√∂tet war
+*   => Erstmal l√∂ten lernen und eine Streifenraster (keine Punktraster) Platine
+*      als Grundlage verwenden
+* * Der Systemabsturz des ESP8622 war kein Programmier oder Hardware-Fehler
+*   sondern die Watchdog. F√ºr m√ºssen das System (w√§hrend des Messens) mit einem
+*   yield() bei Laune Schaltungen
+
+Viel Konzentration sp√§ter, nach vielen Stunden Hardware, ist es jetzt dokumentiert
+und fertig soll am 12.01. verbaut werden.
+
+06.01.2020 tg (in K√ºhtai)
+  

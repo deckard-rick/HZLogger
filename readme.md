@@ -1,17 +1,20 @@
-# TGDevice
+# HZLogger
 
-C++ library for IoT Sensors/Actors with ESP8266 (or NodeMCU etc.) made with Arduino
+Measurement and reporting of temperaturs values from some DS18B20 to analyse a heat-recovery /
+heating (German: Heizung).
 
-## Overview
-There are no results by looking for base classes (or a framework) to easy implement IoT-Devices with sensors and actors with an ESP8622 (NodeMCU) on Arduino (C++).
-All examples/systems I can found are not object orientated, therefor is many copy and paste needed by implementing more than one device and/or they are connected to special servers via special protocols.
-In most cases the homeserver do all the managment/controlling of the devices. The better way is, that there is decentralized knowledge in each device. Therefore I dont want to use a homeserver system, but implementing my own small web based dashboard.
-Web-Server and devices are connectd via http / json.
+## Motivation
+We are living in passive house without heating.
+The original controller for the heat-recovery is so old and without service that we have to
+renew it in some years. This old controller has no logging or an interface to connect to.
+
+For this in a first step, I want to learn, what the old controller is doing.
+In a first step I want to measure the temperatures on some points
+of the heating system and log this on an own server.
 
 ## Getting Started
 
-Download as submodule into your project repository and install in your
-Arduino library folder
+Download and compile with Arduino for your ESP8266 (NodeMCU)
 
 ## Running the tests
 
@@ -25,6 +28,7 @@ compile it for your iot device
 
 * [Arduino](https://www.arduino.cc/) - Arduino
 * [ESP8266](https://github.com/esp8266/Arduino) - ESP8266 Libraries
+* [TGDevice](https://github.com/deckard-rick/TGDevice.git) - Base ESP8266 IoT Device
 
 ## Authors
 
