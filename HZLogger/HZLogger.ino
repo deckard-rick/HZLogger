@@ -1,4 +1,4 @@
-/**
+  /**
 *  Project HZLogger
 *  based on TGDevice (https://github.com/deckard-rick/TGDevice.git)
 *
@@ -73,6 +73,9 @@
 * Hinweis: Die Libraries stehen hier: C:\Users\tengicki\Documents\Arduino\libraries und seit dem 23.09.2019 unter git
 *          Ursprung DS18B20 Ansteuerung vom beelogger, http://beelogger.de
 */
+
+#define DEBUG_ESP_HTTP_CLIENT 1
+#define DEBUG_ESP_PORT Serial
 
 //base classes
 #include <tgDevice.hpp>
