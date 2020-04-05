@@ -162,7 +162,7 @@ class TDHT22SensorTemp : public TGSensor
 class TDHT22SensorHum : public TGSensor
 {
   public:
-    TDHT22SensorHum(DHTesp *aDht, char* aId, float *apDelta):TGSensor(aId,apDelta) {dht=aDht;};
+    TDHT22SensorHum(DHTesp *aDht, const char* aId, float *apDelta):TGSensor(aId,apDelta) {dht=aDht;};
   protected:
     /**
      * get the value of the sensor
