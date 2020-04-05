@@ -1,3 +1,6 @@
 [submodule "tgArduinoLib"]
 	path = tgArduinoLib
 	url = /share/stockholm/tengicki/DatenAndreas/Repositories/tgArduinoLib.git/
+[submodule "libArduino"]
+	path = libArduino
+	url = ./libArduino
